@@ -187,16 +187,24 @@ function state() {
     weeklyGoals: weeklyGoals(), weekOverview: weekOverview(), shape: P.tracks.length ? 'program' : P.weeklyGoals.length ? 'weekly' : 'routine',
     streak: streak(), line: S.lastLine,
     habits: P.habits.map(h => ({ ...h, streak: habitStreak(h) })),
-    heatmaps: P.heatmaps.map(m => ({ ...m, streak: heatStreak(m), counts: Object.fromEntries(Object.keys(S.days).map(k => [k, heatCount(S.days[k], m)])) })),
+    heatmaps: P.heatmaps.map(m => {
+      const todayTot = taskHeatTotals(tasksFor(t))[m.id];
+      const hab = m.habit ? habitById(m.habit) : null;
+      return { ...m, streak: heatStreak(m), full: hab ? hab.great : null,
+        counts: Object.fromEntries(Object.keys(S.days).map(k => [k, heatCount(S.days[k], m)])),
+        totals: Object.fromEntries(Object.keys(S.days).map(k => [k, k === t ? todayTot : ((S.days[k].heatTotals || {})[m.id] || 0)])) };
+    }),
     plan: { title: P.meta.title, description: P.meta.description || '', source: planInfo.source, errors: planInfo.errors, warnings: planInfo.warnings, animation: P.ui.heatmapAnimation },
     port: PORT, version: VERSION, update: { status: upd.status, latest: upd.latest, notes: upd.notes, error: upd.error, checkedAt: upd.checkedAt }
   };
 }
 
 function celebrate(kind, text) { if (kind && kind !== 'none') overlay(kind, text); }
+const taskHeatTotals = tl => Object.fromEntries(P.heatmaps.filter(m => !m.habit).map(m => [m.id, tl.filter(t => m.tasks.includes(t.id)).reduce((a, t) => a + (t.subs.length || 1), 0)]));
 function afterChange(d) {
-  const e = day(d);
-  e.total = tasksFor(d).length;
+  const e = day(d), tl = tasksFor(d);
+  e.total = tl.length;
+  e.heatTotals = taskHeatTotals(tl); // what each heatmap could get that day, so colour scales with the share done
   if (d === today() && e.total && dayScore(d) >= 1 && !e.fullCelebrated) {
     e.fullCelebrated = true; S.lastLine = msg('dayDone'); save();
     celebrate(P.coach.celebrations.dayComplete, S.lastLine);

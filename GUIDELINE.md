@@ -189,7 +189,7 @@ Counters you tap **+1** on, with their own streak and an optional heatmap.
 | `messages.target` / `messages.great` | | celebration text |
 
 ### heatmaps[]
-Each heatmap counts **either** subtasks completed for some tasks (`tasks: [lift, mobility]`) **or** one habit (`habit: reading`). `levels` sets the minimum daily count for colour levels 1–4, e.g. `[1, 3, 6, 9]`. If you leave out `heatmaps`, you get one "All tasks" map plus one per habit. 3–5 heatmaps works best; they appear as pages you flip through.
+Each heatmap counts **either** subtasks completed for some tasks (`tasks: [lift, mobility]`) **or** one habit (`habit: reading`). Colour brightens smoothly with the share of that day's subtasks done (habits: the share of `great`). `levels`, e.g. `[1, 3, 6, 9]`, is a fallback: its last number counts as a full day when the app can't tell how many subtasks were planned. If you leave out `heatmaps`, you get one "All tasks" map plus one per habit. 3–5 heatmaps works best; they appear as pages you flip through.
 
 ### coach
 - `tone`: `gentle`, `balanced` or `strict` (a hint for the AI when writing messages).

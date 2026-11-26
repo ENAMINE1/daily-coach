@@ -1,5 +1,9 @@
 {
 let st = null;
+let theme = 'dark';
+try { theme = localStorage.getItem('theme') || 'dark'; } catch {}
+const applyTheme = () => { document.documentElement.dataset.theme = theme; const b = document.getElementById('themeBtn'); if (b) b.textContent = theme === 'dark' ? 'Light theme' : 'Dark theme'; };
+applyTheme();
 const view = { tab: 'today', wk: {}, heat: 0 };
 const ci = { open: false, step: 0, done: {}, note: '', habits: {}, verdict: null };
 const $ = s => document.querySelector(s);
@@ -8,7 +12,7 @@ const fmt = d => { const [y, m, dd] = d.split('-').map(Number); return new Date(
 const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
 const dkey = d => { const z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-const lv = (c, levels) => levels.filter(x => c >= x).length;
+const prevToday = {};
 
 async function refresh() {
   st = await coach.state();
@@ -85,7 +89,12 @@ function graph(m) {
     if (d.getDay() === 0) { if (d.getMonth() !== lastM && d.getDate() <= 7) { months.push([col + 1, d.toLocaleDateString(undefined, { month: 'short' })]); lastM = d.getMonth(); } col++; }
     if (d > end) { cells.push('<i class="g-x"></i>'); continue; }
     const k = dkey(d), c = m.counts[k] || 0; total += c; if (c) active++;
-    cells.push(`<i class="g${lv(c, m.levels)}${k === st.today ? ' g-today' : ''}" title="${plural(c, unit)} on ${fmt(k)}"></i>`);
+    const tot = m.habit ? m.full : (m.totals[k] || m.levels[3]), r = c ? Math.min(1, c / tot) : 0, isToday = k === st.today;
+    const bump = isToday && prevToday[m.id] !== undefined && c > prevToday[m.id];
+    if (isToday) prevToday[m.id] = c;
+    const tip = !c ? 'nothing' : m.habit ? plural(c, unit) : `${c} of ${tot} subtasks (${Math.round(r * 100)}%)`;
+    cells.push(c ? `<i class="gc${r >= 1 ? ' gfull' : ''}${isToday ? ' g-today' : ''}${bump ? ' bump' : ''}" style="--r:${(0.15 + 0.85 * r).toFixed(3)}" title="${tip} on ${fmt(k)}"></i>`
+                 : `<i class="g0${isToday ? ' g-today' : ''}" title="${tip} on ${fmt(k)}"></i>`);
   }
   return `<section class="card wide gcard"><div class="ghead"><h2>${esc(m.name)}</h2><span class="k" style="margin:0">${plural(total, unit)} in the last year · ${plural(active, 'active day')} · <b class="gs">${m.streak}-day streak</b></span></div>
   <div class="gscroll"><div class="gwrap" style="--cols:${col}">
@@ -100,12 +109,10 @@ function book() {
     ${H.length > 1 ? `<div class="hanim"><span class="k" style="margin:0">Animation</span>${ANIMS.map(([k, n]) => `<button class="btn small ${a === k ? 'sel' : ''}" data-anim="${k}">${n}</button>`).join('')}</div>` : ''}
   </div>
   <div class="book ${H.length > 1 ? '' : 'single'}">
-    ${H.length > 1 ? '<button class="turn prev" data-turn="-1" aria-label="Previous heatmap">‹</button>' : ''}
     <div class="stage" id="stage" data-anim="${a}" tabindex="0" aria-label="Heatmaps. Scroll or use arrow keys to turn pages">${H.map((m, j) => `<div class="page ${j === i ? 'on' : ''}" data-p="${j}">${graph(m)}</div>`).join('')}</div>
-    ${H.length > 1 ? '<button class="turn next" data-turn="1" aria-label="Next heatmap">›</button>' : ''}
   </div>
   <div class="hfoot">${H.length > 1 ? `<div class="dots">${H.map((m, j) => `<button class="dot ${j === i ? 'on' : ''}" data-heat="${j}" aria-label="${esc(m.name)}"></button>`).join('')}</div>` : '<span></span>'}
-  <div class="glegend" style="margin:0">${H.length > 1 ? 'Scroll, swipe or press ← → to turn pages · ' : ''}Less <i class="g0"></i><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i> More</div></div>`;
+  <div class="glegend" style="margin:0">${H.length > 1 ? 'Scroll, swipe or press ← → to turn pages · ' : ''}0% <span class="glgrad"></span> 100% of the day's subtasks</div></div>`;
 }
 function turnTo(n) {
   const len = st.heatmaps.length, cur = view.heat;
@@ -268,6 +275,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'themeBtn') { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('theme', theme); } catch {} applyTheme(); return; }
   if (b.dataset.tab) { view.tab = b.dataset.tab; render(); }
   else if (b.dataset.heat !== undefined) turnTo(+b.dataset.heat);
   else if (b.dataset.turn) turnTo(view.heat + +b.dataset.turn);

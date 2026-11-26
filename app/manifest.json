@@ -1,20 +1,20 @@
 {
-  "version": "2.1.0",
-  "notes": "Daily routines and weekly plans: no long program needed. Weekly goals reset every week.",
-  "released": "2026-11-26T18:19:00.898Z",
+  "version": "2.1.1",
+  "notes": "Heatmap squares brighten with every subtask. Light theme. No side arrows.",
+  "released": "2026-11-26T18:23:38.267Z",
   "files": {
     "SKILL.md": "93720ebfbcc69865e1a841e544da9e25631ddebef4cb8da0734ce981ffae406f",
-    "app.css": "7c5a92e9a2fd3a1a95b46fbbeb23da85d7e090f6beb41d2bcafdcaea28f0c0e1",
+    "app.css": "f034107645dc34e1c00ed0f21a4f2467f81db3ae971a8cc69f608f5b4de835f5",
     "icon.png": "56693e30898ddc7ed4762278ee3f523ed16e88b508988bbb545efe6cbf5b8a25",
-    "index.html": "8c19505c17f5e94a642269d34d4239710adadc224a6bec605407c5365490bc42",
+    "index.html": "fefad29a5384cb5b7e52241f1d4eb7455ab796a2c92c2e0902d2253ae9da0f67",
     "js-yaml.min.js": "45dc3dd03dc07a06705a2c2989b8c7f709013f04bd5386e3279d4e447f07ebd7",
-    "main.js": "d8d84bec11bbf9e0a6dfc59b6b3b231229209e71f0cee6d539c2c60a7facba1f",
+    "main.js": "64cc98ce956f71a15ba0c50bc977929a147e1576aea2a21010ec27ff55a2d73e",
     "overlay.html": "f5f7d3a36aeebf46b84bf0f6e51cd61bf95f266e478e8dcb8a37ee791a4e6439",
-    "package.json": "d24bc0ee930739de3bbfb69da903ac7825829c4936e1220bc5fb6b4f2bae3322",
+    "package.json": "c14f671b14f6e41aac50a6c386edb3c45ce671c1d5e7c2628705c3bb75ba1c83",
     "plan.default.json": "4dbd0f33840111b8981a7c01bab76f5df46a9715ca45121c16389367e835412c",
     "plan.js": "67fa5e687f64c722341de65f5872314cc75e8a97e7d8ed89ac8c64a6924b6124",
     "plan.schema.json": "775d08ab61c1e06daa67082c885eac9ee23b49fb429ad8e2729e4bce8ae11364",
     "preload.js": "d5b217a800f4327f8cc7d35946b2ccd7e5d1db730ce755bcc92a83a291f00a83",
-    "renderer.js": "305539d1121db9cd68e8f7c173e93d572c6e4776add855325da47428f69e71f2"
+    "renderer.js": "b9d817fc9b7873edea907eec7e02db812014fc71722dcb7a2a9f8fc2a27c5f56"
   }
 }
