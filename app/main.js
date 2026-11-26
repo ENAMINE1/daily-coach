@@ -125,8 +125,10 @@ function state() {
 }
 
 function afterChange(d) {
-  const e = day(d);
-  e.total = tasksFor(d).length;
+  const e = day(d), tl = tasksFor(d);
+  e.total = tl.length;
+  // how many subtasks each heatmap could get that day, so the colour can scale with the share done
+  e.heatTotals = Object.fromEntries(Object.keys(CAT).map(c => [c, tl.filter(t => CAT[c].includes(t.id)).reduce((a, t) => a + t.subs.length, 0)]));
   if (d === today() && dayScore(d) >= 1 && !e.fullCelebrated) {
     e.fullCelebrated = true;
     S.lastLine = pick(L.dayDone);

@@ -1,5 +1,9 @@
 {
 let st = null;
+let theme = 'dark';
+try { theme = localStorage.getItem('theme') || 'dark'; } catch {}
+const applyTheme = () => { document.documentElement.dataset.theme = theme; const b = document.getElementById('themeBtn'); if (b) b.textContent = theme === 'dark' ? 'Light theme' : 'Dark theme'; };
+applyTheme();
 const view = { tab: 'today', b: null, a: null };
 const ci = { open: false, step: 0, done: {}, note: '', verdict: null };
 const $ = s => document.querySelector(s);
@@ -56,6 +60,16 @@ const catCount = (e, c) => {
   if (keys.length) return keys.filter(k => subs[k] && CAT[c].includes(k.split('.')[0])).length;
   return Object.keys(e.done || {}).filter(k => e.done[k] && CAT[c].includes(k)).length * 2;
 };
+const FULL = { java: 9, sd: 2, ae: 2 };
+const prevToday = {};
+// share of the day's possible subtasks done (habits: share of a "great day"), 0..1
+function heatRatio(k, cat, c) {
+  if (!c) return [0, 0];
+  if (cat.id === 'dsa') return [Math.min(1, c / 2), 2];
+  let tot = k === st.today ? st.todayTasks.reduce((a, t) => a + (CAT[cat.id].includes(t.id) ? t.subs.length : 0), 0) : ((st.days[k] || {}).heatTotals || {})[cat.id];
+  if (!tot) tot = FULL[cat.id];
+  return [Math.min(1, c / tot), tot];
+}
 const contrib = e => ['java', 'sd', 'ae'].reduce((a, c) => a + catCount(e, c), 0);
 const dkey = d => { const z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
 
@@ -67,7 +81,12 @@ function graph(cat) {
     if (d.getDay() === 0) { if (d.getMonth() !== lastM && d.getDate() <= 7) { months.push([col + 1, d.toLocaleDateString(undefined, { month: 'short' })]); lastM = d.getMonth(); } col++; }
     if (d > end) { cells.push('<i class="g-x"></i>'); continue; }
     const k = dkey(d), c = catCount(st.days[k], cat.id); total += c; if (c) active++;
-    cells.push(`<i class="g${cat.lv(c)}${k === st.today ? ' g-today' : ''}" title="${c} ${cat.unit}${c === 1 ? '' : 's'} on ${fmt(k)}"></i>`);
+    const [r, tot] = heatRatio(k, cat, c), isToday = k === st.today;
+    const bump = isToday && prevToday[cat.id] !== undefined && c > prevToday[cat.id];
+    if (isToday) prevToday[cat.id] = c;
+    const tip = c ? (cat.id === 'dsa' ? `${c} problem${c === 1 ? '' : 's'}` : `${c} of ${tot} subtasks (${Math.round(r * 100)}%)`) : `nothing`;
+    cells.push(c ? `<i class="gc${r >= 1 ? ' gfull' : ''}${isToday ? ' g-today' : ''}${bump ? ' bump' : ''}" style="--r:${(0.15 + 0.85 * r).toFixed(3)}" title="${tip} on ${fmt(k)}"></i>`
+                 : `<i class="g0${isToday ? ' g-today' : ''}" title="${tip} on ${fmt(k)}"></i>`);
   }
   return `<section class="card wide gcard"><div class="ghead"><h2>${cat.name}</h2><span class="k" style="margin:0">${total} ${cat.unit}${total === 1 ? '' : 's'} in the last year · ${active} active days · <b class="gs">${st.streaks[cat.id]}-day streak</b></span></div>
   <div class="gscroll"><div class="gwrap" style="--cols:${col}">
@@ -86,12 +105,10 @@ function streaks() {
     <div class="hanim"><span class="k" style="margin:0">Animation</span>${ANIMS.map(([k, n]) => `<button class="btn small ${anim === k ? 'sel' : ''}" data-anim="${k}">${n}</button>`).join('')}</div>
   </div>
   <div class="book">
-    <button class="turn prev" data-turn="-1" aria-label="Previous heatmap">‹</button>
     <div class="stage" id="stage" data-anim="${anim}" tabindex="0" aria-label="Heatmaps. Scroll or use arrow keys to turn pages">${CATS.map((c, j) => `<div class="page ${j === i ? 'on' : ''}" data-p="${j}">${graph(c)}</div>`).join('')}</div>
-    <button class="turn next" data-turn="1" aria-label="Next heatmap">›</button>
   </div>
   <div class="hfoot"><div class="dots">${CATS.map((c, j) => `<button class="dot ${j === i ? 'on' : ''}" data-heat="${j}" aria-label="${c.name}"></button>`).join('')}</div>
-  <div class="glegend" style="margin:0">Scroll, swipe or press ← → to turn pages · Less <i class="g0"></i><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i> More</div></div>`;
+  <div class="glegend" style="margin:0">Scroll, swipe or press ← → to turn pages · 0% <span class="glgrad"></span> 100% of the day's subtasks</div></div>`;
 }
 function turnTo(n) {
   const cur = view.heat || 0, len = CATS.length;
@@ -255,6 +272,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('input', e => { if (e.target.id === 'ciNote') ci.note = e.target.value; if (e.target.id === 'ciDsa') ci.dsa = e.target.value; });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'themeBtn') { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('theme', theme); } catch {} applyTheme(); return; }
   if (b.dataset.tab) { if (b.dataset.jumpheat !== undefined) view.heat = +b.dataset.jumpheat; view.tab = b.dataset.tab; render(); }
   else if (b.dataset.wnav) { const p = b.dataset.wnav, list = p === 'b' ? st.backend : st.ae; view[p] = Math.max(1, Math.min(list.length, (view[p] || (p === 'b' ? st.bw : st.aw)) + +b.dataset.d)); render(); }
   else if (b.dataset.jump) { view[b.dataset.jump] = +b.dataset.n; view.tab = 'week'; render(); }
