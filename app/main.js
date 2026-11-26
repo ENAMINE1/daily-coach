@@ -4,7 +4,7 @@ const fs = require('fs');
 const http = require('http');
 const crypto = require('crypto');
 const os = require('os');
-const { parsePlanText, validatePlan, normalizePlan, DAYS } = require('./plan');
+const { parsePlanText, validatePlan, normalizePlan, DAYS, dayList } = require('./plan');
 
 const PORT = 47820;
 const STARTUP = process.argv.includes('--startup');
@@ -102,12 +102,12 @@ const weekOrder = () => { const s = DAYS.indexOf(P.meta.weekStartsOn === 'sun' ?
 function tasksFor(date) {
   const wd = DAYS[parse(date).getDay()];
   const order = weekOrder();
-  return (P.rhythm[wd] || []).map(task => {
+  return [...dayList(P.rhythm, wd), ...(P.dates[date] || [])].map(task => {
     const t = task.track ? trackById(task.track) : null;
     const n = t ? currentWeek(t) : 0;
     const W = t ? t.weeks[n - 1] : {};
     let occ = 0;
-    for (const d of order) { if (d === wd) break; if ((P.rhythm[d] || []).some(x => x.id === task.id)) occ++; }
+    for (const d of order) { if (d === wd) break; if (dayList(P.rhythm, d).some(x => x.id === task.id)) occ++; }
     const ctx = { week: Object.assign({}, W, { number: n }), track: t ? { name: t.name, id: t.id } : {}, name: name() };
     let subs = W && W.days && W.days[task.id] && W.days[task.id][occ];
     if (!subs) subs = task.subtasks || (W && W.days && W.days[task.id] && W.days[task.id][W.days[task.id].length - 1]) || [];
@@ -152,8 +152,29 @@ function heatStreak(m) {
   return s;
 }
 
+// weekly goals repeat every calendar week, keyed by the week's first day
+function weekStart(date) { const d = parse(date), s = P.meta.weekStartsOn === 'sun' ? 0 : 1; d.setDate(d.getDate() - ((d.getDay() - s + 7) % 7)); return ds(d); }
+function weeklyGoals() {
+  const k = weekStart(today()), g = (S.weekGoals || {})[k] || { items: {}, done: false };
+  return { start: k, done: !!g.done, items: P.weeklyGoals.map((label, i) => ({ id: 'g' + i, label, done: !!g.items['g' + i] })) };
+}
+function setWeekGoal(item, v) {
+  if (!P.weeklyGoals.length) return false;
+  S.weekGoals = S.weekGoals || {};
+  const k = weekStart(today()), g = S.weekGoals[k] || (S.weekGoals[k] = { items: {}, done: false }), ids = P.weeklyGoals.map((_, i) => 'g' + i);
+  if (item === '__all') ids.forEach(i => { g.items[i] = !!v; }); else if (ids.includes(item)) g.items[item] = !!v; else return false;
+  const all = ids.every(i => g.items[i]), was = g.done; g.done = all;
+  if (all && !was) { S.lastLine = `All of this week's goals done. ${msg('praise')}`; save(); celebrate(P.coach.celebrations.weekComplete, S.lastLine); } else save();
+  return true;
+}
+function weekOverview() {
+  const k = weekStart(today());
+  return Array.from({ length: 7 }, (_, i) => { const d = addDays(k, i), t = tasksFor(d), e = S.days[d] || {};
+    return { date: d, total: t.length, done: t.filter(x => e.done && e.done[x.id]).length, labels: t.map(x => x.label) }; });
+}
+
 function state() {
-  const t = today(), y = addDays(t, -1), cw = calendarWeek(), first = P.tracks[0];
+  const t = today(), y = addDays(t, -1), cw = calendarWeek(), first = P.tracks[0] || null;
   return {
     name: name(), startDate: S.startDate, autoStart: S.autoStart, today: t, yesterday: y,
     needsCheckin: S.lastCheckin !== t,
@@ -162,7 +183,8 @@ function state() {
     todayTasks: tasksFor(t), yesterdayTasks: tasksFor(y), days: S.days, weeks: S.weeks,
     tracks: P.tracks.map(tr => ({ id: tr.id, name: tr.name, color: tr.color || null, total: tr.weeks.length, current: currentWeek(tr), done: doneCount(tr),
       weeks: tr.weeks.map((w, i) => ({ title: w.title, limitQuestion: w.limitQuestion || '', goal: w.goal || '', items: weekItems(tr, i + 1) })) })),
-    calendarWeek: cw, behind: Math.max(0, Math.min(cw, first.weeks.length) - currentWeek(first)),
+    calendarWeek: cw, behind: first ? Math.max(0, Math.min(cw, first.weeks.length) - currentWeek(first)) : 0,
+    weeklyGoals: weeklyGoals(), weekOverview: weekOverview(), shape: P.tracks.length ? 'program' : P.weeklyGoals.length ? 'weekly' : 'routine',
     streak: streak(), line: S.lastLine,
     habits: P.habits.map(h => ({ ...h, streak: habitStreak(h) })),
     heatmaps: P.heatmaps.map(m => ({ ...m, streak: heatStreak(m), counts: Object.fromEntries(Object.keys(S.days).map(k => [k, heatCount(S.days[k], m)])) })),
@@ -344,6 +366,7 @@ function summary() {
     tracks: P.tracks.map(tr => { const n = currentWeek(tr), w = tr.weeks[n - 1], st = S.weeks[wkey(tr, n)] || { items: {} };
       return { id: tr.id, name: tr.name, week: n, of: tr.weeks.length, weeksDone: doneCount(tr), ref: wkey(tr, n), title: w.title, limitQuestion: w.limitQuestion || null,
         checklist: weekItems(tr, n).map(i => ({ id: i.id, label: i.label, done: !!st.items[i.id] })) }; }),
+    weeklyGoals: weeklyGoals(),
     habits: P.habits.map(h => ({ id: h.id, name: h.name, unit: h.unit, target: h.target, today: habitCount(e, h.id), items: (e.habitLog && e.habitLog[h.id]) || [], streak: habitStreak(h) })),
     heatmapStreaks: Object.fromEntries(P.heatmaps.map(m => [m.id, heatStreak(m)])),
     last7: logDays(7), lastCoachLine: S.lastLine
@@ -370,7 +393,7 @@ function startServer() {
       if (u.pathname === '/status') return send(200, summary());
       if (u.pathname === '/log') return send(200, logDays(+u.searchParams.get('days') || 7));
       if (u.pathname === '/plan') return send(200, { title: P.meta.title, source: planInfo.source, errors: planInfo.errors, warnings: planInfo.warnings, plan: P });
-      if (u.pathname === '/') return send(200, { app: 'Daily Coach', version: VERSION, endpoints: ['GET /status', 'GET /log?days=7', 'GET /plan', 'POST /plan', 'POST /plan/reset', 'POST /celebrate', 'POST /boost', 'POST /scold', 'POST /message', 'POST /complete', 'POST /checkin', 'POST /week-item', 'POST /habit', 'POST /open', 'POST /update'] });
+      if (u.pathname === '/') return send(200, { app: 'Daily Coach', version: VERSION, endpoints: ['GET /status', 'GET /log?days=7', 'GET /plan', 'POST /plan', 'POST /plan/reset', 'POST /celebrate', 'POST /boost', 'POST /scold', 'POST /message', 'POST /complete', 'POST /checkin', 'POST /week-item', 'POST /week-goal', 'POST /habit', 'POST /open', 'POST /update'] });
       return send(404, { error: 'not found' });
     }
     if (req.method !== 'POST') return send(405, { error: 'use GET or POST' });
@@ -406,6 +429,7 @@ function startServer() {
           if (!setWeekItem(tid, n, String(j.item || ''), yes)) return send(400, { error: 'unknown week or item. Use {"week":"<track>#<n>","item":"i0"} or item "__all"' });
           break;
         }
+        case '/week-goal': if (!setWeekGoal(String(j.item || ''), yes)) return send(400, { error: 'unknown goal; use item "g0", "g1"... or "__all"' }); break;
         case '/habit': case '/dsa': {
           const id = u.pathname === '/dsa' ? 'dsa' : String(j.id || '');
           if (!setHabit(isDate(j.date) ? j.date : today(), id, { count: j.count !== undefined ? +j.count : undefined, add: j.add, item: j.item || j.problem })) return send(400, { error: 'unknown habit', habits: P.habits.map(h => h.id) });
@@ -498,6 +522,7 @@ ipcMain.handle('toggleTask', (_, d, id, v) => { if (isDate(d) && typeof id === '
 ipcMain.handle('toggleSub', (_, d, id, v) => { if (isDate(d) && typeof id === 'string') setSub(d, id, v); return state(); });
 ipcMain.handle('habit', (_, d, id, o) => { if (isDate(d)) setHabit(d, String(id), o || {}); return state(); });
 ipcMain.handle('weekItem', (_, tid, n, item, v) => { setWeekItem(tid, n, item, v); return state(); });
+ipcMain.handle('weekGoal', (_, item, v) => { setWeekGoal(String(item), v); return state(); });
 ipcMain.handle('checkin', (_, p) => doCheckin(p || {}));
 ipcMain.handle('importPlan', (_, text) => installPlan(String(text || '')));
 ipcMain.handle('resetPlan', () => resetPlan());

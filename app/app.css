@@ -159,3 +159,5 @@ code{background:var(--panel2);padding:2px 6px;border-radius:6px;font-size:13px}
 .filebtn{position:relative;overflow:hidden;display:inline-flex;align-items:center}.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .book.single{grid-template-columns:minmax(0,1fr)}
 .card h2 .pill{vertical-align:middle;margin-left:6px}
+.ovr{display:grid;grid-template-columns:120px minmax(0,1fr) 48px;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.ovr:first-of-type{border-top:0}.ovr span{text-align:right;color:var(--mute);font-size:13px}.ovr.now b{color:var(--gold)}

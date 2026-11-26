@@ -1,0 +1,23 @@
+# A weekly plan: goals that reset every week, a different focus each day,
+# plus one-off tasks on specific dates.
+schemaVersion: 1
+meta:
+  title: "Weekly plan"
+  owner: Priya
+weeklyGoals:
+  - "Ship the portfolio landing page"
+  - "3 gym sessions"
+  - "Call home twice"
+  - "Read one chapter of Clean Code"
+rhythm:
+  mon: [{ id: work, label: "Portfolio: layout", minutes: 60, subtasks: ["Sketch the sections", "Build the hero", "Commit"] }]
+  tue: [{ id: gym, label: Gym, minutes: 60, subtasks: ["Warm-up", "Full-body workout", "Stretch"] }]
+  wed: [{ id: work, label: "Portfolio: projects section", minutes: 60, subtasks: ["Pick 3 projects", "Write one paragraph each", "Add screenshots"] }]
+  thu: [{ id: gym, label: Gym, minutes: 60, subtasks: ["Warm-up", "Full-body workout", "Stretch"] }]
+  fri: [{ id: work, label: "Portfolio: polish and deploy", minutes: 60, subtasks: ["Mobile check", "Deploy", "Share the link"] }]
+  sat: [{ id: gym, label: Gym, minutes: 60, subtasks: ["Warm-up", "Full-body workout", "Stretch"] }]
+  sun: [{ id: review, label: Weekly review, minutes: 20, subtasks: ["What went well?", "What slipped, and why?", "Write next week's goals"] }]
+dates:
+  "2026-11-28": [{ id: dentist, label: "Dentist at 4 pm", subtasks: ["Leave by 3:30"] }]
+habits:
+  - { id: read, name: Reading, unit: page, target: 10 }

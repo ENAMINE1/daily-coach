@@ -21,13 +21,15 @@ async function refresh() {
 }
 
 function header() {
-  const first = st.tracks[0];
+  const first = st.tracks[0], wg = st.weeklyGoals;
   $('#top').innerHTML = `
   <div><h1>${greet()}, ${esc(st.name)}</h1>
-  <p>${esc(st.plan.title)} · calendar week ${Math.min(st.calendarWeek, first.total)} of ${first.total}</p></div>
+  <p>${esc(st.plan.title)} · ${first ? `calendar week ${Math.min(st.calendarWeek, first.total)} of ${first.total}` : `week of ${fmt(wg.start)}`}</p></div>
   <div class="stats">
     <div class="stat fire"><b>${st.streak}</b><span>day streak</span></div>
     ${st.tracks.slice(0, 3).map(t => `<div class="stat"><b>${t.done}/${t.total}</b><span>${esc(t.name)}</span></div>`).join('')}
+    ${wg.items.length ? `<div class="stat"><b>${wg.items.filter(i => i.done).length}/${wg.items.length}</b><span>weekly goals</span></div>` : ''}
+    ${!first ? `<div class="stat"><b>${st.weekOverview.reduce((a, d) => a + d.done, 0)}/${st.weekOverview.reduce((a, d) => a + d.total, 0)}</b><span>tasks this week</span></div>` : ''}
   </div>
   ${st.update && st.update.status === 'ready' ? `<div class="upd"><span><b>Update ${esc(st.update.latest)} is ready.</b> ${esc(st.update.notes)}</span><button class="btn primary small" id="updGo">Restart to update</button></div>` : ''}
   ${st.plan.errors.length ? `<div class="warn">${esc(st.plan.errors[0])} See History &amp; settings → Your plan.</div>` : ''}
@@ -137,6 +139,19 @@ function weekCard(t) {
   <div class="actions"><button class="btn small" data-wall="${esc(t.id)}" data-n="${n}" data-v="${w.done ? 0 : 1}">${w.done ? 'Reopen week' : 'Mark whole week done'}</button></div>
   </section>`;
 }
+function goalsCard() {
+  const g = st.weeklyGoals; if (!g.items.length) return '';
+  const n = g.items.filter(i => i.done).length;
+  return `<section class="card"><h2>This week's goals ${g.done ? '<span class="pill done">Done</span>' : ''}</h2>
+  <p class="k" style="margin-top:0">Week of ${fmt(g.start)} · resets every week</p>
+  <div class="bar"><i style="width:${n / g.items.length * 100}%"></i></div>
+  ${g.items.map(i => `<label class="task ${i.done ? 'done' : ''}"><input type="checkbox" class="wg" data-item="${i.id}" ${i.done ? 'checked' : ''}><div><div class="d" style="color:var(--ink)">${esc(i.label)}</div></div></label>`).join('')}</section>`;
+}
+function overviewCard() {
+  const days = st.weekOverview; if (!days.some(d => d.total)) return '';
+  return `<section class="card"><h2>Your week at a glance</h2>${days.map(d => `<div class="ovr ${d.date === st.today ? 'now' : ''}"><b>${fmt(d.date)}</b>
+    <div class="bar" style="margin:0"><i style="width:${d.total ? d.done / d.total * 100 : 0}%"></i></div><span>${d.total ? `${d.done}/${d.total}` : 'rest'}</span></div>`).join('')}</section>`;
+}
 function journey() {
   return st.tracks.map(t => `<h2>${esc(t.name)}</h2><div class="tiles">${t.weeks.map((W, i) => {
     const d = st.weeks[`${t.id}#${i + 1}`] && st.weeks[`${t.id}#${i + 1}`].done;
@@ -207,10 +222,11 @@ function modal() {
 function render() {
   if (!st) return;
   header();
-  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === view.tab));
+  if (view.tab === 'journey' && !st.tracks.length) view.tab = 'today';
+  document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('on', b.dataset.tab === view.tab); if (b.dataset.tab === 'journey') b.hidden = !st.tracks.length; });
   const v = $('#view');
   if (view.tab === 'today') v.innerHTML = today();
-  else if (view.tab === 'week') v.innerHTML = `<div class="grid">${st.tracks.map(weekCard).join('')}</div>`;
+  else if (view.tab === 'week') v.innerHTML = `<div class="grid">${goalsCard()}${overviewCard()}${st.tracks.map(weekCard).join('')}</div>`;
   else if (view.tab === 'journey') v.innerHTML = journey();
   else v.innerHTML = history();
   modal();
@@ -221,6 +237,7 @@ document.addEventListener('change', async e => {
   const t = e.target;
   if (t.classList.contains('tt')) { st = await coach.toggleTask(t.dataset.date, t.dataset.id, t.checked); render(); }
   else if (t.classList.contains('st')) { st = await coach.toggleSub(t.dataset.date, t.dataset.id, t.checked); render(); }
+  else if (t.classList.contains('wg')) { st = await coach.weekGoal(t.dataset.item, t.checked); render(); }
   else if (t.classList.contains('wi')) { st = await coach.weekItem(t.dataset.track, +t.dataset.n, t.dataset.item, t.checked); render(); }
   else if (t.classList.contains('ci')) { ci.done[t.dataset.id] = t.checked; t.closest('.task').classList.toggle('done', t.checked); }
   else if (t.id === 'planFile' && t.files[0]) {

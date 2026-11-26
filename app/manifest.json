@@ -1,20 +1,20 @@
 {
-  "version": "2.0.0",
-  "notes": "Plans are now files you can swap: load any plan an AI writes for you. Habits and heatmaps come from the plan.",
-  "released": "2026-11-26T18:15:20.150Z",
+  "version": "2.1.0",
+  "notes": "Daily routines and weekly plans: no long program needed. Weekly goals reset every week.",
+  "released": "2026-11-26T18:19:00.898Z",
   "files": {
     "SKILL.md": "93720ebfbcc69865e1a841e544da9e25631ddebef4cb8da0734ce981ffae406f",
-    "app.css": "bc52ce703cf71a6f0742fbfe2ad2bb4fcd821f6142b3d46b532a9ca2b1fec0b3",
+    "app.css": "7c5a92e9a2fd3a1a95b46fbbeb23da85d7e090f6beb41d2bcafdcaea28f0c0e1",
     "icon.png": "56693e30898ddc7ed4762278ee3f523ed16e88b508988bbb545efe6cbf5b8a25",
     "index.html": "8c19505c17f5e94a642269d34d4239710adadc224a6bec605407c5365490bc42",
     "js-yaml.min.js": "45dc3dd03dc07a06705a2c2989b8c7f709013f04bd5386e3279d4e447f07ebd7",
-    "main.js": "2b7c4b9dbc2abd5c6e2283a6194a7d5f70e1adbcc51dc55631fdd1fa7157b5a2",
+    "main.js": "d8d84bec11bbf9e0a6dfc59b6b3b231229209e71f0cee6d539c2c60a7facba1f",
     "overlay.html": "f5f7d3a36aeebf46b84bf0f6e51cd61bf95f266e478e8dcb8a37ee791a4e6439",
-    "package.json": "83ad2405bf584f042acd4f636ad42ef9861c5d1457a99d3639ed54b1d7ab45f8",
+    "package.json": "d24bc0ee930739de3bbfb69da903ac7825829c4936e1220bc5fb6b4f2bae3322",
     "plan.default.json": "4dbd0f33840111b8981a7c01bab76f5df46a9715ca45121c16389367e835412c",
-    "plan.js": "f125b1d085ef877f8975b90973050f80c23a49381f872ee309cf02c5b814bd2c",
-    "plan.schema.json": "11508a34b1e084e50fb92536856b297f82c6db7c89173b0c023bfe2e2be7756b",
-    "preload.js": "1a89285e9beff627883795ba7561309ffc613a543e2b34f642d766005f8df8eb",
-    "renderer.js": "3faecb6797ee4b0d483d651edfab004f9b43bacf5c3963fed3e45ee1c06afc68"
+    "plan.js": "67fa5e687f64c722341de65f5872314cc75e8a97e7d8ed89ac8c64a6924b6124",
+    "plan.schema.json": "775d08ab61c1e06daa67082c885eac9ee23b49fb429ad8e2729e4bce8ae11364",
+    "preload.js": "d5b217a800f4327f8cc7d35946b2ccd7e5d1db730ce755bcc92a83a291f00a83",
+    "renderer.js": "305539d1121db9cd68e8f7c173e93d572c6e4776add855325da47428f69e71f2"
   }
 }

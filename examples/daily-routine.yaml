@@ -1,0 +1,29 @@
+# A daily routine: the same checklist every day, no long-term program.
+schemaVersion: 1
+meta:
+  title: "My daily routine"
+  owner: Alex
+  description: "Morning and evening routine, a focus block on workdays, and two daily habits."
+rhythm:
+  daily:
+    - id: morning
+      label: Morning routine
+      minutes: 30
+      subtasks: ["Glass of water", "10 min stretch", "Plan the day: top 3 tasks"]
+    - id: evening
+      label: Evening shutdown
+      minutes: 15
+      subtasks: ["Clear the inbox", "Write tomorrow's top 3", "Screens off by 11 pm"]
+  weekdays:
+    - id: focus
+      label: Deep work block
+      minutes: 90
+      subtasks: ["Phone in another room", "90 minutes on the #1 task", "Note where you stopped"]
+  weekend:
+    - id: outside
+      label: Get outside
+      minutes: 60
+      subtasks: ["Walk, cycle or play a sport for an hour"]
+habits:
+  - { id: water, name: Water, unit: glass, target: 8, great: 10, checkinQuestion: "Glasses of water yesterday" }
+  - { id: steps, name: Steps, unit: thousand step, target: 8, great: 12 }

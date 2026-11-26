@@ -21,22 +21,25 @@ Your progress is kept when you switch plans. Weeks are matched by track id and w
 
 ```text
 You are helping me create a plan file for the Daily Coach app. Follow GUIDELINE.md exactly
-(it is attached below) and output ONE valid YAML document that passes every rule in section 6.
+(it is attached below) and output ONE valid YAML document that passes every rule in section 7.
 
 About me:
 - Name: [your first name]
+- Plan shape: [daily routine / weekly plan / multi-week program]
 - Goal(s): [e.g. "get job-ready in backend Java in 6 months" / "run a half marathon" / "learn Spanish to B1"]
 - Current level: [what you already know or can do]
 - Time per day: [e.g. "2 hours on weekdays, 3 on Saturday, rest on Sunday"]
-- Plan length: [e.g. 12 weeks]
+- Plan length: [e.g. 12 weeks, for programs only]
 - Daily habits I want to count: [e.g. "1 LeetCode problem", "8 glasses of water", "20 pages"]
 - Resources I like or already own: [books, courses, channels]
 - Coach tone: [gentle / balanced / strict]
 
 Requirements:
-- Every week gets a title, a limitQuestion and a 2–6 item checklist.
-- Give day-by-day subtasks (days.<taskId>) for the main tasks, 2–6 concrete steps each:
+- For a multi-week program: every week gets a title, a limitQuestion and a 2–6 item checklist,
+  and day-by-day subtasks (days.<taskId>) for the main tasks, 2–6 concrete steps each:
   what to read or watch (name the resource), what to do or build, and what to write down.
+- For a daily routine or weekly plan: no tracks; put 2–6 concrete subtasks on each task, and use
+  weeklyGoals for things that only need to happen a few times a week.
 - The minutes on each task must add up to my daily time budget.
 - Use stable, lowercase ids. Don't invent fields that the guide doesn't mention.
 - If the plan is long, first output tracks with week titles only, and I'll ask for the
@@ -47,13 +50,55 @@ Requirements:
 
 ---
 
-## 3. How the app reads a plan
+## 3. Pick a plan shape
+
+Most people don't have a six-month program. Daily Coach supports three shapes, and you can mix them:
+
+| Shape | Use it for | What to fill in |
+|---|---|---|
+| **Daily routine** | The same checklist every day (morning routine, focus block, habits) | `rhythm.daily` (and optionally `weekdays` / `weekend`), `habits` |
+| **Weekly plan** | Goals for the week plus a different focus each day | `weeklyGoals`, `rhythm.mon`…`sun`, optional `dates` for one-off tasks |
+| **Multi-week program** | A course or training plan that changes week by week | `tracks` (weeks with checklists and day-by-day subtasks) + `rhythm` |
+
+A daily routine (from `examples/daily-routine.yaml`):
+
+```yaml
+schemaVersion: 1
+meta: { title: "My daily routine", owner: Alex }
+rhythm:
+  daily:    [{ id: morning, label: Morning routine, minutes: 30, subtasks: ["Water", "10 min stretch", "Top 3 tasks"] }]
+  weekdays: [{ id: focus, label: Deep work block, minutes: 90, subtasks: ["Phone away", "90 minutes on task #1"] }]
+  weekend:  [{ id: outside, label: Get outside, minutes: 60 }]
+habits:
+  - { id: water, name: Water, unit: glass, target: 8 }
+```
+
+A weekly plan (from `examples/weekly-plan.yaml`):
+
+```yaml
+schemaVersion: 1
+meta: { title: "Weekly plan", owner: Priya }
+weeklyGoals: ["Ship the landing page", "3 gym sessions", "Call home twice"]
+rhythm:
+  mon: [{ id: work, label: "Landing page: layout", subtasks: ["Sketch sections", "Build hero"] }]
+  tue: [{ id: gym, label: Gym, minutes: 60 }]
+dates:
+  "2026-11-28": [{ id: dentist, label: "Dentist at 4 pm" }]
+```
+
+Weekly goals reset every week. Ticking all of them fires the week celebration. For the AI prompt in section 2, just say which shape you want; you can skip the plan-length line for a routine.
+
+---
+
+## 4. How the app reads a plan
 
 ```
 plan
 ├── meta          title, your name, optional start date
 ├── schedule      when the morning check-in pops up, when the evening nudge fires
-├── tracks[]      long-running areas (e.g. "Backend", "Spanish"), each a list of weeks
+├── weeklyGoals   a checklist that resets every week (weekly plans)
+├── dates         one-off tasks on specific dates
+├── tracks[]      optional: long-running areas (e.g. "Backend", "Spanish"), each a list of weeks
 │    └── weeks[]  title · limitQuestion · checklist · days (subtasks per task, per day)
 ├── rhythm        the repeating week: mon..sun → list of tasks
 ├── habits[]      daily counters (problems solved, pages read, glasses of water)
@@ -62,7 +107,7 @@ plan
 └── ui            default heatmap animation (page | slide | flip)
 ```
 
-**What a day looks like:** on, say, Wednesday the app takes `rhythm.wed`. For each task there, it finds the task's **track**, works out which week of that track you're on (the first week whose checklist isn't complete), and takes that week's subtasks for the task. Ticking every subtask completes the task. Ticking every checklist item of a week completes the week and fires the week celebration.
+**What a day looks like:** on, say, Wednesday the app takes `rhythm.daily` + `rhythm.weekdays` + `rhythm.wed` + any `dates` entry for that date, in that order. For each task there, it finds the task's **track**, works out which week of that track you're on (the first week whose checklist isn't complete), and takes that week's subtasks for the task. Ticking every subtask completes the task. Ticking every checklist item of a week completes the week and fires the week celebration.
 
 ### The occurrence rule (important)
 
@@ -88,7 +133,7 @@ If an entry is missing, the app falls back to the task's own `subtasks` in `rhyt
 
 ---
 
-## 4. Field reference
+## 5. Field reference
 
 ### meta (required)
 | Field | Required | Notes |
@@ -102,7 +147,13 @@ If an entry is missing, the app falls back to the task's own `subtasks` in `rhyt
 ### schedule
 `checkinFrom` (default `"05:00"`) and `nudgeAt` (default `"21:00"`), as 24-hour `"HH:MM"`, or `null` to turn either off.
 
-### tracks[] (at least one)
+### weeklyGoals
+A list of text. A fresh, unticked copy every week (weeks start on `meta.weekStartsOn`).
+
+### dates
+Map of `YYYY-MM-DD` → list of tasks (same fields as rhythm tasks). They're added to that day only.
+
+### tracks[] (optional, for multi-week programs)
 | Field | Notes |
 |---|---|
 | `id` | lowercase, starts with a letter, ≤ 32 chars: letters, digits, `-`, `_` |
@@ -110,8 +161,8 @@ If an entry is missing, the app falls back to the task's own `subtasks` in `rhyt
 | `color` | optional hex colour |
 | `weeks[]` | 1–104 weeks. Each: `title` (required), `goal`, `limitQuestion`, `checklist` (list of text), `days` (see the occurrence rule), plus any extra text fields for templates |
 
-### rhythm (required)
-Keys: `mon tue wed thu fri sat sun` (leave a day out for a rest day). Each value is a list of tasks:
+### rhythm
+Keys: `mon tue wed thu fri sat sun`, plus shortcuts merged into each day: `daily` (every day), `weekdays` (Mon–Fri), `weekend` (Sat–Sun). Leave a day out for a rest day. Each value is a list of tasks:
 
 | Field | Notes |
 |---|---|
@@ -147,7 +198,7 @@ Each heatmap counts **either** subtasks completed for some tasks (`tasks: [lift,
 
 ---
 
-## 5. A minimal valid plan
+## 6. A minimal valid plan
 
 ```yaml
 schemaVersion: 1
@@ -167,14 +218,15 @@ See `examples/fitness-and-reading.yaml` for a fuller example, and `app/plan.defa
 
 ---
 
-## 6. Rules the app enforces
+## 7. Rules the app enforces
 
 The app refuses a plan that breaks any of these, and lists every problem:
 
 - `schemaVersion` is `1`; `meta.title` is present.
-- At least one track; each has a unique `id`, a `name` and 1–104 weeks; every week has a `title`.
+- There's something to track: rhythm tasks, dates, weeklyGoals or habits.
+- Tracks are optional; each one has a unique `id`, a `name` and 1–104 weeks; every week has a `title`.
 - `checklist` and `subtasks` are lists of text; `days.<taskId>` is a list of lists of text.
-- `rhythm` keys are only `mon`–`sun`; at least one task overall; no task id twice on the same day.
+- `rhythm` keys are only `mon`–`sun`, `daily`, `weekdays`, `weekend`; no task id twice on the same day once those are merged; `dates` keys are real dates.
 - Every rhythm task has `id` and `label`; `track` must name an existing track; `minutes` is 0–600.
 - Habit ids are unique and don't clash with task ids; `target` is a whole number ≥ 1.
 - Each heatmap has exactly one of `tasks` or `habit`, pointing at ids that exist; `levels` is 4 ascending whole numbers.
@@ -184,7 +236,7 @@ Warnings (the plan still loads): a task with neither `subtasks` nor a `track`; u
 
 ---
 
-## 7. What makes a plan actually work
+## 8. What makes a plan actually work
 
 - **Concrete subtasks.** "Read Effective Java items 10–11" beats "study equals". Name the chapter, video or exercise.
 - **2–6 subtasks per task.** More than that, and nobody finishes the list.
@@ -194,7 +246,7 @@ Warnings (the plan still loads): a task with neither `subtasks` nor a `track`; u
 - **Rest days are fine.** Leave a weekday out of `rhythm`.
 - **Long plans in batches.** For 20+ weeks, generate track and week titles first, then the `days` in batches, and merge.
 
-## 8. Updating a plan later
+## 9. Updating a plan later
 
 Load the new file the same way. Keep track ids and the order of existing weeks the same, and progress lines up. You can add weeks at the end, rewrite subtasks or change the rhythm at any time. In Claude Code you can also install a plan directly:
 

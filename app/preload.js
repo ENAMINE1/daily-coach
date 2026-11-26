@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('coach', {
   toggleSub: (date, id, v) => ipcRenderer.invoke('toggleSub', date, id, v),
   habit: (date, id, o) => ipcRenderer.invoke('habit', date, id, o),
   weekItem: (track, n, item, v) => ipcRenderer.invoke('weekItem', track, n, item, v),
+  weekGoal: (item, v) => ipcRenderer.invoke('weekGoal', item, v),
   checkin: p => ipcRenderer.invoke('checkin', p),
   importPlan: text => ipcRenderer.invoke('importPlan', text),
   resetPlan: () => ipcRenderer.invoke('resetPlan'),

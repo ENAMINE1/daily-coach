@@ -3,6 +3,10 @@
 const yaml = require('./js-yaml.min.js');
 
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const GROUPS = ['daily', 'weekdays', 'weekend']; // shortcuts merged into each day
+const RKEYS = [...DAYS, ...GROUPS];
+// tasks for a weekday = daily + (weekdays|weekend) + that day
+const dayList = (rhythm, wd) => [...(rhythm.daily || []), ...((wd === 'sat' || wd === 'sun') ? (rhythm.weekend || []) : (rhythm.weekdays || [])), ...(rhythm[wd] || [])];
 const ID = /^[a-z][a-z0-9_-]{0,31}$/;
 const CELEBRATIONS = ['fireworks', 'confetti', 'boost', 'message', 'none'];
 
@@ -41,8 +45,8 @@ function validatePlan(p) {
   if (p.meta && p.meta.startDate !== undefined && !/^\d{4}-\d\d-\d\d$/.test(p.meta.startDate)) err('meta.startDate', 'must be YYYY-MM-DD');
 
   const trackIds = new Set();
-  if (!Array.isArray(p.tracks) || !p.tracks.length) err('tracks', 'need at least one track');
-  else p.tracks.forEach((t, i) => {
+  if (p.tracks !== undefined && !Array.isArray(p.tracks)) err('tracks', 'must be a list (or leave it out for a daily or weekly routine)');
+  else (p.tracks || []).forEach((t, i) => {
     const at = `tracks[${i}]`;
     if (!t || !ID.test(t.id || '')) err(`${at}.id`, 'lowercase id like "backend" (letters, digits, - or _)');
     else if (trackIds.has(t.id)) err(`${at}.id`, `duplicate id "${t.id}"`); else trackIds.add(t.id);
@@ -63,28 +67,44 @@ function validatePlan(p) {
   });
 
   const taskIds = new Set();
-  if (!p.rhythm || typeof p.rhythm !== 'object') err('rhythm', 'required: map of weekday (mon..sun) to a list of tasks');
+  let anyTask = false;
+  const checkTask = (t, at) => {
+    if (!t || !ID.test(t.id || '')) return err(`${at}.id`, 'lowercase task id');
+    taskIds.add(t.id); anyTask = true;
+    if (!isStr(t.label)) err(`${at}.label`, 'required text');
+    if (t.track !== undefined && !trackIds.has(t.track)) err(`${at}.track`, `no track with id "${t.track}"`);
+    if (t.minutes !== undefined && !(Number.isFinite(t.minutes) && t.minutes >= 0 && t.minutes <= 600)) err(`${at}.minutes`, 'number from 0 to 600');
+    if (t.subtasks !== undefined && !strArr(t.subtasks)) err(`${at}.subtasks`, 'must be a list of text');
+    if (!t.subtasks && !t.track) warn(at, 'no subtasks and no track: it will be a single checkbox');
+  };
+  const rhythm = p.rhythm === undefined ? {} : p.rhythm;
+  if (typeof rhythm !== 'object' || Array.isArray(rhythm)) err('rhythm', 'must map weekdays (mon..sun, daily, weekdays, weekend) to lists of tasks');
   else {
-    for (const k of Object.keys(p.rhythm)) if (!DAYS.includes(k)) err(`rhythm.${k}`, 'unknown weekday; use mon, tue, wed, thu, fri, sat, sun');
-    let any = false;
-    for (const d of DAYS) {
-      const list = p.rhythm[d];
-      if (list === undefined) continue;
-      if (!Array.isArray(list)) { err(`rhythm.${d}`, 'must be a list'); continue; }
-      const seen = new Set();
-      list.forEach((t, i) => {
-        const at = `rhythm.${d}[${i}]`; any = true;
-        if (!t || !ID.test(t.id || '')) return err(`${at}.id`, 'lowercase task id');
-        if (seen.has(t.id)) err(`${at}.id`, `task "${t.id}" appears twice on ${d}`); seen.add(t.id); taskIds.add(t.id);
-        if (!isStr(t.label)) err(`${at}.label`, 'required text');
-        if (t.track !== undefined && !trackIds.has(t.track)) err(`${at}.track`, `no track with id "${t.track}"`);
-        if (t.minutes !== undefined && !(Number.isFinite(t.minutes) && t.minutes >= 0 && t.minutes <= 600)) err(`${at}.minutes`, 'number from 0 to 600');
-        if (t.subtasks !== undefined && !strArr(t.subtasks)) err(`${at}.subtasks`, 'must be a list of text');
-        if (!t.subtasks && !t.track) warn(at, 'no subtasks and no track: the task will have no checklist');
-      });
+    for (const k of Object.keys(rhythm)) {
+      if (!RKEYS.includes(k)) { err(`rhythm.${k}`, 'unknown key; use mon..sun, daily, weekdays or weekend'); continue; }
+      if (!Array.isArray(rhythm[k])) { err(`rhythm.${k}`, 'must be a list'); continue; }
+      rhythm[k].forEach((t, i) => checkTask(t, `rhythm.${k}[${i}]`));
     }
-    if (!any) err('rhythm', 'no tasks on any day');
+    for (const d of DAYS) {
+      const ids = dayList(rhythm, d).map(t => t && t.id).filter(Boolean);
+      const dup = ids.find((x, i) => ids.indexOf(x) !== i);
+      if (dup) err(`rhythm`, `task "${dup}" would appear twice on ${d} (check daily/weekdays/weekend and ${d})`);
+    }
   }
+  if (p.dates !== undefined) {
+    if (typeof p.dates !== 'object' || Array.isArray(p.dates)) err('dates', 'must map YYYY-MM-DD to lists of tasks');
+    else for (const [d, list] of Object.entries(p.dates)) {
+      if (!/^\d{4}-\d\d-\d\d$/.test(d)) { err(`dates.${d}`, 'key must be a date YYYY-MM-DD'); continue; }
+      if (!Array.isArray(list)) { err(`dates.${d}`, 'must be a list of tasks'); continue; }
+      list.forEach((t, i) => checkTask(t, `dates.${d}[${i}]`));
+      const wd = DAYS[new Date(d + 'T12:00:00').getDay()];
+      const ids = [...dayList(rhythm || {}, wd), ...list].map(t => t && t.id).filter(Boolean);
+      const dup = ids.find((x, i) => ids.indexOf(x) !== i);
+      if (dup) err(`dates.${d}`, `task "${dup}" appears twice that day`);
+    }
+  }
+  if (p.weeklyGoals !== undefined && !strArr(p.weeklyGoals)) err('weeklyGoals', 'must be a list of text');
+  if (!anyTask && !(p.habits && p.habits.length) && !(p.weeklyGoals && p.weeklyGoals.length)) err('plan', 'nothing to track: add rhythm tasks, dates, weeklyGoals or habits');
 
   const habitIds = new Set();
   (p.habits || []).forEach((h, i) => {
@@ -126,11 +146,14 @@ function normalizePlan(p) {
   const n = JSON.parse(JSON.stringify(p));
   n.meta = Object.assign({ owner: 'friend', weekStartsOn: 'mon' }, n.meta);
   n.rhythm = n.rhythm || {};
+  n.tracks = n.tracks || [];
+  n.dates = n.dates || {};
+  n.weeklyGoals = n.weeklyGoals || [];
   n.habits = (n.habits || []).map(h => Object.assign({ unit: 'time', target: 1, great: Math.max(2, (h.target || 1) + 1), logItems: false }, h));
   n.heatmaps = (n.heatmaps || []).map(m => Object.assign({ levels: m.habit ? [1, 1, 2, 3] : [1, 3, 6, 9] }, m));
   if (!n.heatmaps.length) {
-    const ids = [...new Set(Object.values(n.rhythm).flat().map(t => t.id))];
-    n.heatmaps.push({ id: 'all', name: 'All tasks', tasks: ids, levels: [1, 3, 6, 9] });
+    const ids = [...new Set([...Object.values(n.rhythm).flat(), ...Object.values(n.dates).flat()].map(t => t.id))];
+    if (ids.length) n.heatmaps.push({ id: 'all', name: 'All tasks', tasks: ids, levels: [1, 3, 6, 9] });
     n.habits.forEach(h => n.heatmaps.push({ id: h.id, name: h.name, habit: h.id, levels: [1, 1, 2, 3] }));
   }
   n.coach = n.coach || {};
@@ -141,4 +164,4 @@ function normalizePlan(p) {
   return n;
 }
 
-module.exports = { parsePlanText, validatePlan, normalizePlan, DAYS };
+module.exports = { parsePlanText, validatePlan, normalizePlan, DAYS, dayList };

@@ -10,8 +10,7 @@ Everything the app tracks comes from **one plan file** (YAML or JSON). You don't
 
 - [GUIDELINE.md](GUIDELINE.md): how plans work, plus a copy-paste prompt for an AI
 - [app/plan.schema.json](app/plan.schema.json): JSON Schema, so editors and AIs can validate plans
-- [examples/fitness-and-reading.yaml](examples/fitness-and-reading.yaml): a small complete plan
-- [app/plan.default.json](app/plan.default.json): a large plan (26 backend + 24 After Effects weeks with day-by-day subtasks)
+- Plan shapes: a **daily routine** ([example](examples/daily-routine.yaml)), a **weekly plan** with goals that reset each week ([example](examples/weekly-plan.yaml)), or a **multi-week program** ([small](examples/fitness-and-reading.yaml), [large](app/plan.default.json))
 
 ## Updates
 
