@@ -183,7 +183,7 @@
         "Read: ArrayList (array copy on growth) vs LinkedList (node per element)",
         "Benchmark get(i) and insert-in-middle on both with 1M elements",
         "Read: TreeMap (red-black tree) and PriorityQueue (binary heap) costs",
-        "Make a table: operation × structure → Big-O + real-world gotcha"
+        "Make a table: operation \u00d7 structure \u2192 Big-O + real-world gotcha"
        ],
        [
         "Read ConcurrentHashMap at a high level: why not synchronized HashMap",
@@ -239,7 +239,7 @@
      "days": {
       "core": [
        [
-        "Read EJ items 26–28: raw types, unchecked warnings, lists over arrays",
+        "Read EJ items 26\u201328: raw types, unchecked warnings, lists over arrays",
         "Read: type erasure, and what the bytecode loses",
         "Try to create new T[] and explain why it fails",
         "Note: why can't you overload on List<String> vs List<Integer>?"
@@ -247,11 +247,11 @@
        [
         "Read EJ item 31: bounded wildcards and PECS",
         "Write copy(List<? super T> dst, List<? extends T> src) and explain it",
-        "Read EJ items 69–77 (exceptions), skim and note the key rules",
+        "Read EJ items 69\u201377 (exceptions), skim and note the key rules",
         "Decide: when checked, when unchecked, when a custom exception"
        ],
        [
-        "Read EJ items 42–48: lambdas, method references, streams",
+        "Read EJ items 42\u201348: lambdas, method references, streams",
         "Rewrite 3 loops as streams and 1 stream back as a loop",
         "Read: lazy evaluation, intermediate vs terminal operations",
         "Benchmark a small stream vs a loop; read about when parallelStream hurts"
@@ -342,7 +342,7 @@
        [
         "Answer the limit question: two threads debiting one account",
         "Write the 5-question note for concurrency",
-        "Read EJ items 78–84; skim and note 3 rules",
+        "Read EJ items 78\u201384; skim and note 3 rules",
         "Draft a short: 'Your bank balance and a race condition'"
        ]
       ],
@@ -448,7 +448,7 @@
       "payflow": [
        [
         "Convert PayFlow to Spring Boot (Initializr: Web, Validation)",
-        "Layers: controller → service → repository (in-memory for now)",
+        "Layers: controller \u2192 service \u2192 repository (in-memory for now)",
         "Constructor injection everywhere, no field injection",
         "Add a timing aspect around services"
        ]
@@ -592,7 +592,7 @@
        ],
        [
         "Review all OOD cases done so far",
-        "Make a cheat sheet: case → key classes → pattern"
+        "Make a cheat sheet: case \u2192 key classes \u2192 pattern"
        ],
        [
         "Timed redo: Elevator or Vending machine",
@@ -644,13 +644,13 @@
        [
         "Read Testcontainers' getting-started guide",
         "Write a @DataJpaTest against real Postgres via Testcontainers",
-        "Write one full integration test: HTTP → DB",
+        "Write one full integration test: HTTP \u2192 DB",
         "Measure test times; note what to run on every commit"
        ],
        [
         "Answer the limit question: the first 2 seconds of startup",
         "Write the 5-question note for Boot internals",
-        "Review weeks 5–8 notes",
+        "Review weeks 5\u20138 notes",
         "Draft a short: 'What Spring Boot does before your code runs'"
        ]
       ],
@@ -857,7 +857,7 @@
        [
         "Read: ACID, with what each letter really guarantees",
         "Read: anomalies: dirty read, non-repeatable read, phantom, lost update, write skew",
-        "Make a table: anomaly × isolation level",
+        "Make a table: anomaly \u00d7 isolation level",
         "Note: why Postgres has no 'read uncommitted' in practice"
        ],
        [
@@ -946,7 +946,7 @@
        ],
        [
         "Read: key-value (Redis), document (MongoDB), wide-column (Cassandra), DynamoDB",
-        "Make a table: data shape → best fit → main limit",
+        "Make a table: data shape \u2192 best fit \u2192 main limit",
         "Run Redis in Docker; try strings, hashes, sorted sets, TTL",
         "Note: why DynamoDB makes you design access patterns first"
        ],
@@ -959,7 +959,7 @@
        [
         "Explain replication vs sharding to a non-engineer in 2 min",
         "Write the 5-question note for distributed data",
-        "Review weeks 9–12 notes",
+        "Review weeks 9\u201312 notes",
         "Draft a short: 'Why your bank still uses a mainframe'"
        ]
       ],
@@ -1013,7 +1013,7 @@
         "Read the Spring Security servlet architecture docs: DelegatingFilterProxy, FilterChainProxy",
         "Add the starter and see what changes by default",
         "Print the filter chain at startup (debug logging)",
-        "Note: request → which filters → controller"
+        "Note: request \u2192 which filters \u2192 controller"
        ],
        [
         "Read: Authentication, AuthenticationManager, providers, SecurityContextHolder",
@@ -1058,7 +1058,7 @@
         "Where Keycloak/Okta fit"
        ],
        [
-        "Draw the auth flow for a mobile app → gateway → 3 services",
+        "Draw the auth flow for a mobile app \u2192 gateway \u2192 3 services",
         "Explain each hop's trust boundary"
        ]
       ],
@@ -1190,7 +1190,7 @@
        [
         "Read: Kafka retention, compaction, replication factor, ISR (overview)",
         "Write the 5-question note for messaging",
-        "Review weeks 13–15 notes",
+        "Review weeks 13\u201315 notes",
         "Draft a short: 'Why Kafka can deliver your message twice'"
        ]
       ],
@@ -1366,7 +1366,7 @@
         "TLS termination"
        ],
        [
-        "Draw a request path: DNS → CDN → LB → service → DB",
+        "Draw a request path: DNS \u2192 CDN \u2192 LB \u2192 service \u2192 DB",
         "Explain each hop's failure mode"
        ]
       ],
@@ -1415,7 +1415,7 @@
        [
         "Read: SQS vs SNS vs EventBridge vs MSK",
         "Read: CloudWatch logs, metrics, alarms",
-        "Make a table: need → AWS service → alternative",
+        "Make a table: need \u2192 AWS service \u2192 alternative",
         "Note: what would you never put in a public subnet?"
        ],
        [
@@ -1563,7 +1563,7 @@
        [
         "Read the OpenTelemetry docs: traces, spans, context propagation",
         "Add the OTel Java agent to both services",
-        "View a trace across PayFlow → fraud-check (Jaeger or Tempo)",
+        "View a trace across PayFlow \u2192 fraud-check (Jaeger or Tempo)",
         "Find the slowest span in a transfer"
        ],
        [
@@ -1674,7 +1674,7 @@
         "Draw the data flow"
        ],
        [
-        "Explain OLTP → CDC → lake → BI in 3 minutes",
+        "Explain OLTP \u2192 CDC \u2192 lake \u2192 BI in 3 minutes",
         "Record it"
        ]
       ],
@@ -1691,13 +1691,13 @@
     {
      "title": "Delta Lake and the lakehouse",
      "limitQuestion": "How do you build a daily fraud report over 1B rows without touching prod?",
-     "build": "Bronze → silver → gold pipeline.",
+     "build": "Bronze \u2192 silver \u2192 gold pipeline.",
      "systemDesign": "HLD case: ad-click aggregation / top-K",
      "checklist": [
       "Learn: ACID on files, time travel, MERGE, schema evolution",
       "Learn: Medallion architecture; Unity Catalog",
       "Learn: Structured Streaming and Auto Loader",
-      "Build: Bronze → silver → gold pipeline.",
+      "Build: Bronze \u2192 silver \u2192 gold pipeline.",
       "System design: HLD case: ad-click aggregation / top-K"
      ],
      "days": {
@@ -1857,19 +1857,19 @@
      "days": {
       "core": [
        [
-        "Re-answer the limit questions for weeks 1–8 without notes",
+        "Re-answer the limit questions for weeks 1\u20138 without notes",
         "Mark the ones you got wrong",
         "Re-study those for 30 min",
         "Record yourself answering the 3 hardest"
        ],
        [
-        "Re-answer the limit questions for weeks 9–16",
+        "Re-answer the limit questions for weeks 9\u201316",
         "Mark the weak ones",
         "Re-study for 30 min",
         "Record the 3 hardest"
        ],
        [
-        "Re-answer the limit questions for weeks 17–23",
+        "Re-answer the limit questions for weeks 17\u201323",
         "Mark the weak ones",
         "Re-study for 30 min",
         "Record the 3 hardest"
@@ -1933,7 +1933,7 @@
      "days": {
       "core": [
        [
-        "List every unticked item from weeks 1–24",
+        "List every unticked item from weeks 1\u201324",
         "Pick the 3 most important"
        ],
        [
@@ -2057,7 +2057,7 @@
       "ae": [
        [
         "Learn (10 min): AE home screen, panels, workspaces",
-        "Make (20 min): new 1080×1920 comp; add a solid and a text layer"
+        "Make (20 min): new 1080\u00d71920 comp; add a solid and a text layer"
        ],
        [
         "Learn: the 5 transform properties (P, S, R, T, A shortcuts)",
@@ -2149,7 +2149,7 @@
        ],
        [
         "Learn: the render queue vs Adobe Media Encoder",
-        "Make: export an MP4 for Instagram (H.264, 1080×1920)"
+        "Make: export an MP4 for Instagram (H.264, 1080\u00d71920)"
        ],
        [
         "Learn: looping (loopOut basics or a matched first/last frame)",
@@ -2392,7 +2392,7 @@
      "days": {
       "ae": [
        [
-        "Learn: how to break down a pro shot (watch at 0.25×)",
+        "Learn: how to break down a pro shot (watch at 0.25\u00d7)",
         "Make: pick a 5-second shot on Motionographer or Vimeo"
        ],
        [
@@ -2616,7 +2616,7 @@
      "days": {
       "ae": [
        [
-        "Learn: explainer structure (problem → mechanism → result)",
+        "Learn: explainer structure (problem \u2192 mechanism \u2192 result)",
         "Make: script 'a request through a load balancer' in 4 beats"
        ],
        [
@@ -2962,14 +2962,14 @@
    },
    {
     "id": "shorts",
-    "label": "Record 1–2 shorts",
+    "label": "Record 1\u20132 shorts",
     "detail": "Turn this week's best note into a 45-second video",
     "track": "b",
     "minutes": 30,
     "subtasks": [
      "Pick the week's best note",
      "Write a 2-second hook and a 3-beat script",
-     "Record 1–2 takes",
+     "Record 1\u20132 takes",
      "Edit and post (or schedule)"
     ]
    }
@@ -3008,7 +3008,8 @@
     3,
     6,
     9
-   ]
+   ],
+   "palette": "ocean"
   },
   {
    "id": "sd",
@@ -3022,7 +3023,8 @@
     1,
     2,
     3
-   ]
+   ],
+   "palette": "grape"
   },
   {
    "id": "ae",
@@ -3035,7 +3037,8 @@
     1,
     2,
     3
-   ]
+   ],
+   "palette": "sunset"
   },
   {
    "id": "dsa",
@@ -3046,7 +3049,8 @@
     1,
     2,
     3
-   ]
+   ],
+   "palette": "forest"
   }
  ],
  "ui": {

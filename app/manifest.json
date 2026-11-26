@@ -1,20 +1,20 @@
 {
-  "version": "2.1.1",
-  "notes": "Heatmap squares brighten with every subtask. Light theme. No side arrows.",
-  "released": "2026-11-26T18:23:38.267Z",
+  "version": "2.1.2",
+  "notes": "Each heatmap has its own colour palette, plus total, longest streak and current streak under every map.",
+  "released": "2026-11-26T18:30:40.786Z",
   "files": {
     "SKILL.md": "93720ebfbcc69865e1a841e544da9e25631ddebef4cb8da0734ce981ffae406f",
-    "app.css": "f034107645dc34e1c00ed0f21a4f2467f81db3ae971a8cc69f608f5b4de835f5",
+    "app.css": "f2334a5a7f5775d6a827879ee112cdeae7ae9a501bb937a0e3eaace2c6dea90b",
     "icon.png": "56693e30898ddc7ed4762278ee3f523ed16e88b508988bbb545efe6cbf5b8a25",
     "index.html": "fefad29a5384cb5b7e52241f1d4eb7455ab796a2c92c2e0902d2253ae9da0f67",
     "js-yaml.min.js": "45dc3dd03dc07a06705a2c2989b8c7f709013f04bd5386e3279d4e447f07ebd7",
     "main.js": "64cc98ce956f71a15ba0c50bc977929a147e1576aea2a21010ec27ff55a2d73e",
     "overlay.html": "f5f7d3a36aeebf46b84bf0f6e51cd61bf95f266e478e8dcb8a37ee791a4e6439",
-    "package.json": "c14f671b14f6e41aac50a6c386edb3c45ce671c1d5e7c2628705c3bb75ba1c83",
-    "plan.default.json": "4dbd0f33840111b8981a7c01bab76f5df46a9715ca45121c16389367e835412c",
-    "plan.js": "67fa5e687f64c722341de65f5872314cc75e8a97e7d8ed89ac8c64a6924b6124",
-    "plan.schema.json": "775d08ab61c1e06daa67082c885eac9ee23b49fb429ad8e2729e4bce8ae11364",
+    "package.json": "57ed8523fa0910f42892093f9eac0b981f482fa5484084a487c7528ce3bd7458",
+    "plan.default.json": "c396968d14a30032aecf4bb51b451a4d8ff457cd12f27b5566c5193dc740a38f",
+    "plan.js": "bd338394c2f6ad07bd4902f130dc299c6bf673cfade8a732df91579ae48c2313",
+    "plan.schema.json": "d8aa623ebc37c6bbfc8c099f854f228675b5438682dd7657c3ad49ea255e7ff3",
     "preload.js": "d5b217a800f4327f8cc7d35946b2ccd7e5d1db730ce755bcc92a83a291f00a83",
-    "renderer.js": "b9d817fc9b7873edea907eec7e02db812014fc71722dcb7a2a9f8fc2a27c5f56"
+    "renderer.js": "6b689123e993a296279ec4c7710c72bf676c4c55222231c93e2d35fa631cb950"
   }
 }

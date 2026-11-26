@@ -13,6 +13,29 @@ const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good mor
 const dkey = d => { const z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const prevToday = {};
+const NAMED = {
+  ocean:  { h: 217, dark: ['#0b2a5c', '#1f5fbf', '#4f9dff', '#b8dcff'], light: ['#cfe3ff', '#7fb2ff', '#2f6fe0', '#0b2f80'] },
+  grape:  { h: 268, dark: ['#2a1352', '#5b2bb3', '#9a6bff', '#e2d2ff'], light: ['#e9e0ff', '#b79bff', '#7a45e6', '#2e0f6e'] },
+  sunset: { h: 32,  dark: ['#4a2600', '#c26a00', '#ffa31a', '#fff176'], light: ['#fff3a3', '#ffd23f', '#fb8c00', '#1a1a1a'] },
+  forest: { h: 137, dark: ['#0e4429', '#006d32', '#26a641', '#39d353'], light: ['#9be9a8', '#40c463', '#30a14e', '#216e39'] },
+  rose:   { h: 340, dark: ['#4a0f24', '#a3194d', '#f0527f', '#ffc2d4'], light: ['#ffdbe6', '#ff8fb1', '#e0115f', '#6e0a2f'] },
+  teal:   { h: 180, dark: ['#053b3b', '#0a7a78', '#19c2bd', '#a6f5ef'], light: ['#c9f4f1', '#6fdcd5', '#109c95', '#064a47'] }
+};
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const hueOf = c => { const [r, g, b] = hex(c).map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; if (!d) return 0; const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return Math.round(((h * 60) + 360) % 360); };
+const pal = m => Array.isArray(m.palette) ? m.palette : (NAMED[m.palette] || NAMED.forest)[theme === 'light' ? 'light' : 'dark'];
+const hueFor = m => Array.isArray(m.palette) ? hueOf(m.palette[2]) : (NAMED[m.palette] || NAMED.forest).h;
+function heatColor(m, r) {
+  const P = pal(m), x = Math.max(0, Math.min(1, r)) * 3, i = Math.min(2, Math.floor(x)), t = x - i, a = hex(P[i]), b = hex(P[i + 1]);
+  return '#' + a.map((v, k) => Math.round(v + (b[k] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function streakStats(m) {
+  const end = new Date(); end.setHours(0, 0, 0, 0);
+  let best = 0, run = 0, runStart = null, bestStart = null, bestEnd = null;
+  for (let i = 364; i >= 0; i--) { const d = new Date(end); d.setDate(d.getDate() - i); const k = dkey(d);
+    if ((m.counts[k] || 0) > 0) { if (!run) runStart = k; run++; if (run > best) { best = run; bestStart = runStart; bestEnd = k; } } else run = 0; }
+  return { best, bestStart, bestEnd };
+}
 
 async function refresh() {
   st = await coach.state();
@@ -93,26 +116,33 @@ function graph(m) {
     const bump = isToday && prevToday[m.id] !== undefined && c > prevToday[m.id];
     if (isToday) prevToday[m.id] = c;
     const tip = !c ? 'nothing' : m.habit ? plural(c, unit) : `${c} of ${tot} subtasks (${Math.round(r * 100)}%)`;
-    cells.push(c ? `<i class="gc${r >= 1 ? ' gfull' : ''}${isToday ? ' g-today' : ''}${bump ? ' bump' : ''}" style="--r:${(0.15 + 0.85 * r).toFixed(3)}" title="${tip} on ${fmt(k)}"></i>`
+    const shade = c ? heatColor(m, r) : '';
+    cells.push(c ? `<i class="gc${r >= 1 ? ' gfull' : ''}${isToday ? ' g-today' : ''}${bump ? ' bump' : ''}" style="background:${shade};color:${shade}" title="${tip} on ${fmt(k)}"></i>`
                  : `<i class="g0${isToday ? ' g-today' : ''}" title="${tip} on ${fmt(k)}"></i>`);
   }
-  return `<section class="card wide gcard"><div class="ghead"><h2>${esc(m.name)}</h2><span class="k" style="margin:0">${plural(total, unit)} in the last year · ${plural(active, 'active day')} · <b class="gs">${m.streak}-day streak</b></span></div>
+  const ss = streakStats(m);
+  return `<section class="card wide gcard" style="--h:${hueFor(m)}"><div class="ghead"><h2>${esc(m.name)}</h2><span class="gdot" style="background:${pal(m)[2]}"></span></div>
   <div class="gscroll"><div class="gwrap" style="--cols:${col}">
     <div class="gmonths">${months.map(([c, mo]) => `<span style="grid-column:${c}">${mo}</span>`).join('')}</div>
     <div class="gdays"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span></div>
-    <div class="ggrid">${cells.join('')}</div></div></div></section>`;
+    <div class="ggrid">${cells.join('')}</div></div></div>
+  <div class="glegend">Less <i class="g0"></i>${pal(m).map(c => `<i style="background:${c}"></i>`).join('')} More</div>
+  <div class="gstats">
+    <div><span>Total in the last year</span><b>${plural(total, unit)}</b><small>${plural(active, 'active day')}</small></div>
+    <div><span>Longest streak</span><b>${plural(ss.best, 'day')}</b><small>${ss.best ? `${fmt(ss.bestStart)} – ${fmt(ss.bestEnd)}` : 'not started yet'}</small></div>
+    <div><span>Current streak</span><b>${plural(m.streak, 'day')}</b><small>${m.streak ? 'keep it alive today' : 'start one today'}</small></div></div></section>`;
 }
 function book() {
   const i = view.heat, H = st.heatmaps, a = getAnim();
   return `<div class="hbar">
-    <div class="hpills" role="tablist">${H.map((m, j) => `<button role="tab" aria-selected="${j === i}" class="hpill ${j === i ? 'on' : ''}" data-heat="${j}">${esc(m.name)}<b>${m.streak}</b></button>`).join('')}</div>
+    <div class="hpills" role="tablist">${H.map((m, j) => `<button role="tab" aria-selected="${j === i}" class="hpill ${j === i ? 'on' : ''}" style="--h:${hueFor(m)}" data-heat="${j}">${esc(m.name)}<b>${m.streak}</b></button>`).join('')}</div>
     ${H.length > 1 ? `<div class="hanim"><span class="k" style="margin:0">Animation</span>${ANIMS.map(([k, n]) => `<button class="btn small ${a === k ? 'sel' : ''}" data-anim="${k}">${n}</button>`).join('')}</div>` : ''}
   </div>
   <div class="book ${H.length > 1 ? '' : 'single'}">
     <div class="stage" id="stage" data-anim="${a}" tabindex="0" aria-label="Heatmaps. Scroll or use arrow keys to turn pages">${H.map((m, j) => `<div class="page ${j === i ? 'on' : ''}" data-p="${j}">${graph(m)}</div>`).join('')}</div>
   </div>
-  <div class="hfoot">${H.length > 1 ? `<div class="dots">${H.map((m, j) => `<button class="dot ${j === i ? 'on' : ''}" data-heat="${j}" aria-label="${esc(m.name)}"></button>`).join('')}</div>` : '<span></span>'}
-  <div class="glegend" style="margin:0">${H.length > 1 ? 'Scroll, swipe or press ← → to turn pages · ' : ''}0% <span class="glgrad"></span> 100% of the day's subtasks</div></div>`;
+  <div class="hfoot">${H.length > 1 ? `<div class="dots">${H.map((m, j) => `<button class="dot ${j === i ? 'on' : ''}" style="--h:${hueFor(m)}" data-heat="${j}" aria-label="${esc(m.name)}"></button>`).join('')}</div>` : '<span></span>'}
+  <div class="glegend" style="margin:0">${H.length > 1 ? 'Scroll, swipe or press ← → to turn pages · ' : ''}each subtask brightens today's square</div></div>`;
 }
 function turnTo(n) {
   const len = st.heatmaps.length, cur = view.heat;
@@ -275,7 +305,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.id === 'themeBtn') { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('theme', theme); } catch {} applyTheme(); return; }
+  if (b.id === 'themeBtn') { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('theme', theme); } catch {} applyTheme(); render(); return; }
   if (b.dataset.tab) { view.tab = b.dataset.tab; render(); }
   else if (b.dataset.heat !== undefined) turnTo(+b.dataset.heat);
   else if (b.dataset.turn) turnTo(view.heat + +b.dataset.turn);

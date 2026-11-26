@@ -9,6 +9,8 @@ const RKEYS = [...DAYS, ...GROUPS];
 const dayList = (rhythm, wd) => [...(rhythm.daily || []), ...((wd === 'sat' || wd === 'sun') ? (rhythm.weekend || []) : (rhythm.weekdays || [])), ...(rhythm[wd] || [])];
 const ID = /^[a-z][a-z0-9_-]{0,31}$/;
 const CELEBRATIONS = ['fireworks', 'confetti', 'boost', 'message', 'none'];
+const PALETTE_NAMES = ['ocean', 'grape', 'sunset', 'forest', 'rose', 'teal'];
+const HEX = /^#[0-9a-fA-F]{6}$/;
 
 const DEFAULT_MESSAGES = {
   good: ['Every task done yesterday, {name}. Do it again today.', 'Full marks for yesterday. Stack another one on top.'],
@@ -125,6 +127,7 @@ function validatePlan(p) {
     if (hasTasks === hasHabit) err(at, 'set exactly one of "tasks" (list of task ids) or "habit" (a habit id)');
     if (hasTasks) m.tasks.forEach(t => { if (!taskIds.has(t)) err(`${at}.tasks`, `no task with id "${t}" in rhythm`); });
     if (hasHabit && !habitIds.has(m.habit)) err(`${at}.habit`, `no habit with id "${m.habit}"`);
+    if (m.palette !== undefined && !(PALETTE_NAMES.includes(m.palette) || (Array.isArray(m.palette) && m.palette.length === 4 && m.palette.every(c => HEX.test(c))))) err(`${at}.palette`, `one of ${PALETTE_NAMES.join(', ')}, or 4 colours like ["#0b2a5c", "#1f5fbf", "#4f9dff", "#b8dcff"] from low to high`);
     if (m.levels !== undefined && !(Array.isArray(m.levels) && m.levels.length === 4 && m.levels.every((x, k) => Number.isInteger(x) && x >= 1 && (k === 0 || x >= m.levels[k - 1])))) err(`${at}.levels`, '4 ascending whole numbers, e.g. [1, 3, 6, 9]');
   });
 
@@ -156,6 +159,7 @@ function normalizePlan(p) {
     if (ids.length) n.heatmaps.push({ id: 'all', name: 'All tasks', tasks: ids, levels: [1, 3, 6, 9] });
     n.habits.forEach(h => n.heatmaps.push({ id: h.id, name: h.name, habit: h.id, levels: [1, 1, 2, 3] }));
   }
+  n.heatmaps.forEach((m, i) => { if (!m.palette) m.palette = PALETTE_NAMES[i % PALETTE_NAMES.length]; });
   n.coach = n.coach || {};
   n.coach.messages = Object.assign({}, DEFAULT_MESSAGES, n.coach.messages || {});
   n.coach.celebrations = Object.assign({ weekComplete: 'fireworks', dayComplete: 'confetti', habitTarget: 'boost' }, n.coach.celebrations || {});

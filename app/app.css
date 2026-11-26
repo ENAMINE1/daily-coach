@@ -156,8 +156,9 @@ code{background:var(--panel2);padding:2px 6px;border-radius:6px;font-size:13px}
 .inline-heat .gcard{padding:16px 18px}
 
 /* ---- continuous heatmap colour: --r = share of the day's subtasks done ---- */
-.ggrid i.gc{background:hsl(137 calc(45% + 30% * var(--r)) calc(12% + 40% * var(--r)));transition:background .5s,box-shadow .5s}
-.ggrid i.gfull{box-shadow:0 0 8px rgba(57,211,83,.7)}
+.gcard{--h:137}
+.ggrid i.gc,.glegend i.gc{background:hsl(var(--h) calc(45% + 35% * var(--r)) calc(14% + 44% * var(--r)));transition:background .5s,box-shadow .5s}
+.ggrid i.gfull{box-shadow:0 0 8px hsl(var(--h) 85% 58% / .75)}
 .ggrid i.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1)}
 @keyframes bump{0%{transform:scale(1.7)}100%{transform:scale(1)}}
 .glgrad{display:inline-block;width:90px;height:11px;border-radius:3px;background:linear-gradient(90deg,hsl(137 49% 18%),hsl(137 75% 52%));vertical-align:middle}
@@ -187,11 +188,32 @@ nav{align-items:center}
 :root[data-theme=light] #modal{background:rgba(16,26,51,.45)}
 :root[data-theme=light] .mbox{box-shadow:0 30px 80px rgba(16,26,51,.25)}
 :root[data-theme=light] .g0,:root[data-theme=light] .heat div{background:#e4e9f2}
-:root[data-theme=light] .ggrid i.gc{background:hsl(142 calc(40% + 30% * var(--r)) calc(82% - 52% * var(--r)))}
-:root[data-theme=light] .ggrid i.gfull{box-shadow:0 0 6px rgba(33,110,57,.45)}
+:root[data-theme=light] .ggrid i.gc,:root[data-theme=light] .glegend i.gc{background:hsl(var(--h) calc(45% + 30% * var(--r)) calc(84% - 50% * var(--r)))}
+:root[data-theme=light] .ggrid i.gfull{box-shadow:0 0 6px hsl(var(--h) 70% 35% / .45)}
 :root[data-theme=light] .glgrad{background:linear-gradient(90deg,hsl(142 45% 74%),hsl(142 70% 30%))}
 :root[data-theme=light] .sub:hover{background:rgba(16,26,51,.04)}
 :root[data-theme=light] .turn:hover{color:var(--ink)}
+
+/* per-heatmap colour accents */
+.gcard .glegend{margin-top:10px}
+.gcard .gs{color:hsl(var(--h) 80% 65%)}
+.hpill.on{background:hsl(var(--h) 55% 18%);border-color:hsl(var(--h) 75% 58%)}
+.hpill.on b{background:hsl(var(--h) 70% 48%);color:#fff}
+.dot.on{background:hsl(var(--h) 75% 55%)}
+:root[data-theme=light] .gcard .gs{color:hsl(var(--h) 70% 38%)}
+:root[data-theme=light] .hpill.on{background:hsl(var(--h) 85% 95%);border-color:hsl(var(--h) 70% 50%);color:hsl(var(--h) 70% 30%)}
+:root[data-theme=light] .hpill.on b{background:hsl(var(--h) 70% 45%)}
+
+.ggrid i.gfull{box-shadow:0 0 7px currentColor}
+.gcard .ghead{justify-content:flex-start;align-items:center;gap:10px}
+.gdot{width:12px;height:12px;border-radius:4px;display:inline-block}
+.gstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:14px -18px -16px;border-top:1px solid var(--line)}
+.gstats div{padding:12px 14px;text-align:center;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.gstats div:first-child{border-left:0}
+.gstats span{font-size:12px;color:var(--mute)}
+.gstats b{font-size:24px;font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;font-weight:600;line-height:1.2}
+.gstats small{font-size:12px;color:var(--mute)}
+@media(max-width:700px){.gstats b{font-size:18px}}
 
 .errs{background:var(--mag2);border:1px solid var(--mag);border-radius:10px;padding:10px 14px;margin:10px 0;color:#ffd6e4;font-size:14px}
 .errs ul{margin:6px 0 0;padding-left:18px}.okmsg{background:#0d2e25;border:1px solid #1f6b50;border-radius:10px;padding:10px 14px;margin:10px 0;color:#c9f5df}
