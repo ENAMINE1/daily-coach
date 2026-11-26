@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>
+html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+#vig{position:fixed;inset:0;opacity:0;pointer-events:none}
+body.scold #vig{background:radial-gradient(ellipse at center,transparent 55%,rgba(224,17,95,.55) 100%);animation:pulse 1.1s ease-in-out 5}
+body.boost #vig{background:radial-gradient(ellipse at center,transparent 60%,rgba(242,177,52,.35) 100%);animation:pulse 2s ease-in-out 3}
+@keyframes pulse{0%,100%{opacity:0}50%{opacity:1}}
+#banner{position:fixed;left:50%;top:11vh;transform:translate(-50%,-30px);opacity:0;transition:opacity .5s,transform .5s cubic-bezier(.2,1.4,.4,1);max-width:min(820px,86vw);
+ background:rgba(9,18,46,.94);color:#fff;border-radius:20px;padding:22px 34px;box-shadow:0 20px 60px rgba(0,0,0,.45);
+ font:600 30px/1.3 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;text-align:center;border:2px solid #e0115f}
+#banner small{display:block;font-size:15px;font-weight:700;color:#ff8fb6;margin-bottom:6px}
+body.boost #banner{border-color:#f2b134}body.boost #banner small{color:#f2b134}
+body.confetti #banner,body.fireworks #banner{border-color:#3ddc97}body.confetti #banner small,body.fireworks #banner small{color:#3ddc97}
+body.message #banner{border-color:#4f8cff}body.message #banner small{color:#8fb4ff}
+#banner.in{opacity:1;transform:translate(-50%,0)}
+body.scold #banner.in{animation:shake .5s 2 .4s}
+@keyframes shake{0%,100%{transform:translate(-50%,0)}20%{transform:translate(calc(-50% - 14px),0)}40%{transform:translate(calc(-50% + 12px),0)}60%{transform:translate(calc(-50% - 8px),0)}80%{transform:translate(calc(-50% + 5px),0)}}
+@media(prefers-reduced-motion:reduce){#banner,#banner.in{transition:opacity .3s;animation:none!important}#vig{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="vig"></div>
+<canvas id="c"></canvas>
+<div id="banner"><small id="lab"></small><span id="txt"></span></div>
+<script>
+{
+const q = new URLSearchParams(location.search);
+const kind = ['fireworks', 'confetti', 'boost', 'scold', 'message'].includes(q.get('kind')) ? q.get('kind') : 'message';
+const labels = { fireworks: 'Week complete', confetti: 'Great work', boost: 'Keep going', scold: 'Hey, Rahul', message: 'Message from Claude' };
+document.body.className = kind;
+document.getElementById('lab').textContent = labels[kind];
+document.getElementById('txt').textContent = q.get('msg') || '';
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const total = kind === 'fireworks' ? 9000 : 6500;
+const banner = document.getElementById('banner');
+setTimeout(() => banner.classList.add('in'), 150);
+setTimeout(() => banner.classList.remove('in'), total - 900);
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let W, H; const dpr = window.devicePixelRatio || 1;
+const size = () => { W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+size(); addEventListener('resize', size);
+
+const COLS = ['#e0115f', '#f2b134', '#3ddc97', '#4f8cff', '#ffffff', '#ff8fb6', '#b48cff'];
+const P = [], rockets = [];
+const rnd = (a, b) => a + Math.random() * (b - a);
+const t0 = performance.now();
+
+function burst(x, y) {
+  const c1 = COLS[Math.floor(Math.random() * COLS.length)], c2 = COLS[Math.floor(Math.random() * COLS.length)];
+  const n = 90;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, s = rnd(2, 7.5);
+    P.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, decay: rnd(.008, .016), c: i % 2 ? c1 : c2, r: rnd(1.6, 3), type: 'spark', g: .06, drag: .985 });
+  }
+}
+function launch(side) {
+  const x = side ? W - rnd(0, W * .06) : rnd(0, W * .06);
+  rockets.push({ x, y: H + 10, vx: (side ? -1 : 1) * rnd(3.5, 7), vy: -rnd(H * .012 + 9, H * .014 + 12), trail: [] });
+}
+function cannon(side) {
+  const x = side ? W : 0, y = H;
+  for (let i = 0; i < 160; i++) {
+    const ang = side ? rnd(-2.25, -1.75) : rnd(-1.4, -0.9), s = rnd(9, 22);
+    P.push({ x, y, vx: Math.cos(ang) * s * (side ? 1 : 1), vy: Math.sin(ang) * s, life: 1, decay: rnd(.003, .006), c: COLS[i % COLS.length], w: rnd(6, 12), h: rnd(3, 7), rot: rnd(0, 6.28), vr: rnd(-.3, .3), type: 'paper', g: .28, drag: .975 });
+  }
+}
+function riser() {
+  P.push({ x: rnd(0, W), y: H + 10, vx: rnd(-.4, .4), vy: -rnd(2, 5), life: 1, decay: rnd(.004, .008), c: Math.random() < .6 ? '#f2b134' : '#ffffff', r: rnd(2, 4.5), type: 'glow', g: -.01, drag: 1 });
+}
+
+// schedule
+if (!reduce) {
+  if (kind === 'fireworks') { for (let i = 0; i < 16; i++) setTimeout(() => launch(i % 2), i * 420); setTimeout(() => { cannon(0); cannon(1); }, 200); }
+  if (kind === 'confetti') { [0, 700, 1500].forEach(t => setTimeout(() => { cannon(0); cannon(1); }, t)); }
+  if (kind === 'boost') { const iv = setInterval(() => { for (let i = 0; i < 4; i++) riser(); }, 60); setTimeout(() => clearInterval(iv), 4200); }
+}
+
+function frame(now) {
+  ctx.clearRect(0, 0, W, H);
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const r = rockets[i];
+    r.trail.push([r.x, r.y]); if (r.trail.length > 10) r.trail.shift();
+    r.x += r.vx; r.y += r.vy; r.vy += .22;
+    ctx.strokeStyle = 'rgba(255,220,160,.8)'; ctx.lineWidth = 2; ctx.beginPath();
+    r.trail.forEach(([x, y], j) => j ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+    if (r.vy > -1.5) { burst(r.x, r.y); rockets.splice(i, 1); }
+  }
+  for (let i = P.length - 1; i >= 0; i--) {
+    const p = P[i];
+    p.vx *= p.drag; p.vy = p.vy * p.drag + p.g; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+    if (p.life <= 0 || p.y > H + 40) { P.splice(i, 1); continue; }
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.4));
+    if (p.type === 'paper') {
+      p.rot += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.scale(1, Math.abs(Math.cos(p.rot * 2)) + .2);
+      ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+    } else {
+      ctx.fillStyle = p.c; ctx.shadowColor = p.c; ctx.shadowBlur = p.type === 'glow' ? 14 : 8;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.283); ctx.fill(); ctx.shadowBlur = 0;
+    }
+  }
+  ctx.globalAlpha = 1;
+  if (now - t0 < total) requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
