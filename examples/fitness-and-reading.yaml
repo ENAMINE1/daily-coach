@@ -1,0 +1,69 @@
+# A small but complete Daily Coach plan. Load it from History & settings → Your plan → Choose plan file.
+schemaVersion: 1
+meta:
+  title: "4-week strength starter + daily reading"
+  owner: Maria
+  description: "Three strength sessions a week, short mobility on the other days, 20 pages of reading daily."
+  weekStartsOn: mon
+schedule:
+  checkinFrom: "06:30"
+  nudgeAt: "20:30"
+coach:
+  tone: balanced
+  messages:
+    bad: ["Yesterday slipped, {name}. Ten minutes of anything today resets it."]
+    dayDone: ["Session done. Your future self says thanks."]
+tracks:
+  - id: strength
+    name: Strength
+    color: "#f2b134"
+    weeks:
+      - title: "Learn the movements"
+        limitQuestion: "Can you squat to parallel with a neutral spine?"
+        checklist: ["3 sessions completed", "Film one set of squats and check form"]
+        days:
+          lift:
+            - ["Warm-up: 5 min bike + leg swings", "Goblet squat 3×10 (light)", "Push-ups 3×8 (knees OK)", "Dumbbell row 3×10 each side"]
+            - ["Warm-up: 5 min brisk walk", "Romanian deadlift 3×10 (light)", "Overhead press 3×8", "Plank 3×30 s"]
+            - ["Warm-up: 5 min bike", "Goblet squat 3×12", "Push-ups 3×10", "Glute bridge 3×12"]
+      - title: "Add a little load"
+        checklist: ["3 sessions completed", "Add weight to two lifts"]
+      - title: "Build volume"
+        checklist: ["3 sessions completed", "4 sets on the main lifts"]
+      - title: "Test week"
+        limitQuestion: "How much stronger are you than week 1? Write the numbers down."
+        checklist: ["3 sessions completed", "Record your best set for each lift"]
+rhythm:
+  mon: &liftday
+    - id: lift
+      label: Strength session
+      detail: "Week {week.number}: {week.title}"
+      track: strength
+      minutes: 45
+      subtasks: ["Warm-up 5 min", "Main lift 4 sets", "Accessory 3 sets", "Stretch 5 min"]
+  tue: &mobility
+    - id: mobility
+      label: Mobility
+      minutes: 15
+      subtasks: ["Hip openers 5 min", "Thoracic rotations 5 min", "Hamstring stretch 5 min"]
+  wed: *liftday
+  thu: *mobility
+  fri: *liftday
+  sat:
+    - id: walk
+      label: Long walk
+      minutes: 45
+      subtasks: ["Walk 45 minutes outside"]
+habits:
+  - id: reading
+    name: Reading
+    unit: page
+    target: 20
+    great: 40
+    logItems: true
+    itemPlaceholder: "Book title"
+    checkinQuestion: "Pages read yesterday"
+    messages: { target: "20 pages done. That's a book a month.", great: "40 pages! Great day." }
+heatmaps:
+  - { id: training, name: Training, tasks: [lift, mobility, walk], levels: [1, 2, 4, 6] }
+  - { id: reading, name: Reading, habit: reading, levels: [1, 10, 20, 40] }

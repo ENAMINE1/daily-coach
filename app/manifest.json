@@ -1,18 +1,20 @@
 {
-  "version": "1.3.1",
-  "notes": "Heatmaps now flip inline on the Today screen: scroll, swipe or use the arrows. Try the 3 animations.",
-  "released": "2026-11-26T18:01:36.350Z",
+  "version": "2.0.0",
+  "notes": "Plans are now files you can swap: load any plan an AI writes for you. Habits and heatmaps come from the plan.",
+  "released": "2026-11-26T18:15:20.150Z",
   "files": {
-    "SKILL.md": "c72848720d332631a81a746f5d13c338702cdd7122a9a68919f05d4e6043d1db",
-    "app.css": "bebde38f590c2312acaec0df42a589d6dc4f964a23851a18be5132e17eaef557",
-    "daily.js": "4eae67cd7baa50b30426b4df54582769d3bc6474e459f3ff56cee65da777365a",
-    "data.js": "cba31cdba0955fd6a807d6115bbeea0559929594decfa6114b6e910ddd678681",
+    "SKILL.md": "93720ebfbcc69865e1a841e544da9e25631ddebef4cb8da0734ce981ffae406f",
+    "app.css": "bc52ce703cf71a6f0742fbfe2ad2bb4fcd821f6142b3d46b532a9ca2b1fec0b3",
     "icon.png": "56693e30898ddc7ed4762278ee3f523ed16e88b508988bbb545efe6cbf5b8a25",
     "index.html": "8c19505c17f5e94a642269d34d4239710adadc224a6bec605407c5365490bc42",
-    "main.js": "f42e6aa5371c3dc70027ff75be324e3d745547a8f8ca32cbcc319cf199bfbfed",
-    "overlay.html": "92c459a9e9636d046ba692836ef04407003dd76c6d60d0e3531cd39c91e88a51",
-    "package.json": "a958b35c5e779a82479d1aed91995f9175d466df9dc304c72f8db269e29a9574",
-    "preload.js": "11a1ef6add5a429e3137934019825629f7511c812b1ba30784a1ad136e73788b",
-    "renderer.js": "abbbd22ea3b7bafa1abc1dce4d03d3942ecedcc324862fd546e2f686a8395595"
+    "js-yaml.min.js": "45dc3dd03dc07a06705a2c2989b8c7f709013f04bd5386e3279d4e447f07ebd7",
+    "main.js": "2b7c4b9dbc2abd5c6e2283a6194a7d5f70e1adbcc51dc55631fdd1fa7157b5a2",
+    "overlay.html": "f5f7d3a36aeebf46b84bf0f6e51cd61bf95f266e478e8dcb8a37ee791a4e6439",
+    "package.json": "83ad2405bf584f042acd4f636ad42ef9861c5d1457a99d3639ed54b1d7ab45f8",
+    "plan.default.json": "4dbd0f33840111b8981a7c01bab76f5df46a9715ca45121c16389367e835412c",
+    "plan.js": "f125b1d085ef877f8975b90973050f80c23a49381f872ee309cf02c5b814bd2c",
+    "plan.schema.json": "11508a34b1e084e50fb92536856b297f82c6db7c89173b0c023bfe2e2be7756b",
+    "preload.js": "1a89285e9beff627883795ba7561309ffc613a543e2b34f642d766005f8df8eb",
+    "renderer.js": "3faecb6797ee4b0d483d651edfab004f9b43bacf5c3963fed3e45ee1c06afc68"
   }
 }

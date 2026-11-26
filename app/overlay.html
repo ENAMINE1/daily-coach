@@ -31,7 +31,7 @@ body.scold #banner.in{animation:shake .5s 2 .4s}
 {
 const q = new URLSearchParams(location.search);
 const kind = ['fireworks', 'confetti', 'boost', 'scold', 'message'].includes(q.get('kind')) ? q.get('kind') : 'message';
-const labels = { fireworks: 'Week complete', confetti: 'Great work', boost: 'Keep going', scold: 'Hey, Rahul', message: 'Message from Claude' };
+const labels = { fireworks: 'Week complete', confetti: 'Great work', boost: 'Keep going', scold: q.get('name') ? 'Hey, ' + q.get('name') : 'Hey', message: 'Message from Claude' };
 document.body.className = kind;
 document.getElementById('lab').textContent = labels[kind];
 document.getElementById('txt').textContent = q.get('msg') || '';

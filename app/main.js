@@ -1,16 +1,15 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, powerMonitor, net } = require('electron');
-const crypto = require('crypto');
-const os = require('os');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const R = require('./data');
-const D = require('./daily');
+const crypto = require('crypto');
+const os = require('os');
+const { parsePlanText, validatePlan, normalizePlan, DAYS } = require('./plan');
 
 const PORT = 47820;
 const STARTUP = process.argv.includes('--startup');
 
-// ---------- date helpers (local time) ----------
+// ---------- helpers ----------
 const z = n => String(n).padStart(2, '0');
 const ds = d => `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 const today = () => ds(new Date());
@@ -18,22 +17,44 @@ const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date
 const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return ds(d); };
 const diffDays = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
 const isDate = s => typeof s === 'string' && /^\d{4}-\d\d-\d\d$/.test(s);
-const pick = a => a[Math.floor(Math.random() * a.length)];
+const pick = a => (a && a.length ? a[Math.floor(Math.random() * a.length)] : '');
 const str = (v, max = 300) => (typeof v === 'string' ? v.slice(0, max) : '');
+const fill = (tpl, ctx) => String(tpl == null ? '' : tpl).replace(/\{([\w.]+)\}/g, (m, k) => {
+  const v = k.split('.').reduce((o, p) => (o == null ? undefined : o[p]), ctx);
+  return v == null ? m : String(v);
+});
+const hm = s => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + m; };
 
-// ---------- coach lines ----------
-const L = {
-  good: ["Every task done yesterday. That's how six months actually gets finished.", "Full marks for yesterday. Do it again today.", "Yesterday was a complete day. Stack another one on top."],
-  ok: ["Half done is better than zero, but don't let 'half' become the habit.", "Some progress yesterday. Today, finish the list.", "Decent, not great. You know which task you dodged. Start with that one."],
-  bad: ["Yesterday was close to zero. The roadmap doesn't move on its own, Rahul.", "You skipped yesterday. No excuses today: open the first task now.", "Zero-ish day. One bad day is noise, two is a pattern. Don't make it two."],
-  start: ["Day one. Two hours today, that's all. Go.", "New day, clean slate. First task, right now."],
-  dayDone: ["Every task done today. Proper work.", "Today's list is cleared. That's a win."],
-  nudgeSoft: ["There's still time tonight.", "Finish strong."],
-  nudgeHard: ["Close the laptop on a zero day? Not today.", "Twenty minutes now beats a perfect plan tomorrow."],
-  boost: ["You're building something most people only talk about. Keep going.", "Consistency beats intensity. Show up today."],
-  scold: ["Stop scrolling. Open the task.", "You said you wanted someone on your back. This is it. Go."],
-  praise: ["That's how it's done.", "Proud of that one. Keep the streak alive."]
-};
+// ---------- plan ----------
+let P = null, planInfo = { source: 'default', errors: [], warnings: [] };
+const userPlanPath = () => path.join(app.getPath('userData'), 'plan.json');
+function loadPlan() {
+  const def = JSON.parse(fs.readFileSync(path.join(__dirname, 'plan.default.json'), 'utf8'));
+  planInfo = { source: 'default', errors: [], warnings: [] };
+  let chosen = def;
+  if (fs.existsSync(userPlanPath())) {
+    try {
+      const p = JSON.parse(fs.readFileSync(userPlanPath(), 'utf8'));
+      const v = validatePlan(p);
+      if (v.errors.length) planInfo = { source: 'default', errors: ['Your plan file has problems, so the default plan is in use.', ...v.errors], warnings: v.warnings };
+      else { chosen = p; planInfo = { source: 'custom', errors: [], warnings: v.warnings }; }
+    } catch (e) { planInfo = { source: 'default', errors: ['Could not read your plan file: ' + e.message], warnings: [] }; }
+  }
+  P = normalizePlan(chosen);
+}
+function installPlan(text) {
+  let p;
+  try { p = parsePlanText(text); } catch (e) { return { ok: false, errors: ['Could not parse the file: ' + e.message] }; }
+  const v = validatePlan(p);
+  if (v.errors.length) return { ok: false, errors: v.errors, warnings: v.warnings };
+  fs.writeFileSync(userPlanPath(), JSON.stringify(p, null, 1));
+  loadPlan();
+  if (P.meta.startDate && isDate(P.meta.startDate)) { S.startDate = P.meta.startDate; }
+  migrate(); save(); refreshWin();
+  return { ok: true, warnings: v.warnings, title: P.meta.title };
+}
+function resetPlan() { try { fs.rmSync(userPlanPath(), { force: true }); } catch {} loadPlan(); migrate(); save(); refreshWin(); return { ok: true }; }
+const msg = k => fill(pick(P.coach.messages[k]), { name: P.meta.owner });
 
 // ---------- store ----------
 let S, storePath;
@@ -41,63 +62,66 @@ function load() {
   storePath = path.join(app.getPath('userData'), 'coach.json');
   let old = null;
   try { old = JSON.parse(fs.readFileSync(storePath, 'utf8')); } catch { old = null; }
-  // nudgeDate = today on first run, so install day never gets a 9 pm scolding
-  S = Object.assign({ name: 'Rahul', startDate: today(), autoStart: true, days: {}, weeks: {}, lastCheckin: null, promptDate: null, nudgeDate: today(), lastLine: '', events: [] }, old || {});
-  save();
+  S = Object.assign({ name: null, startDate: today(), autoStart: true, days: {}, weeks: {}, lastCheckin: null, promptDate: null, nudgeDate: today(), lastLine: '', events: [] }, old || {});
 }
 function save() {
   const t = storePath + '.tmp';
   fs.writeFileSync(t, JSON.stringify(S, null, 1));
   fs.renameSync(t, storePath);
 }
+// Older versions stored weeks as "b5" with items l0/b/sd, and DSA as day.dsa. Copy them into the new shape.
+function migrate() {
+  for (const t of P.tracks) {
+    t.weeks.forEach((w, i) => {
+      const oldKey = t.id + (i + 1), key = wkey(t, i + 1);
+      if (/^[a-z]$/.test(t.id) && S.weeks[oldKey] && !S.weeks[key]) {
+        const o = S.weeks[oldKey], items = {};
+        const legacy = Object.keys(o.items || {});
+        const order = legacy.some(k => /^l\d+$/.test(k)) || legacy.includes('b') ? [...legacy.filter(k => /^l\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1)), 'b', 'sd'] : ['learn', 'make'];
+        order.forEach((k, j) => { if (o.items && o.items[k]) items['i' + j] = true; });
+        S.weeks[key] = { items, done: !!o.done, doneAt: o.doneAt };
+      }
+    });
+  }
+  for (const e of Object.values(S.days)) {
+    if (e.dsa !== undefined && !(e.habits && e.habits.dsa !== undefined)) { e.habits = Object.assign({}, e.habits, { dsa: e.dsa }); }
+    if (e.dsaList && !(e.habitLog && e.habitLog.dsa)) { e.habitLog = Object.assign({}, e.habitLog, { dsa: e.dsaList }); }
+  }
+}
+const name = () => S.name || P.meta.owner;
 
 // ---------- plan logic ----------
-const wkItems = k => (k[0] === 'b' ? [...R.backend[+k.slice(1) - 1].l.map((_, i) => 'l' + i), 'b', 'sd'] : ['learn', 'make']);
-const wk = k => S.weeks[k] || (S.weeks[k] = { items: {}, done: false });
-const validWeek = k => typeof k === 'string' && /^[ba]\d+$/.test(k) && +k.slice(1) >= 1 && +k.slice(1) <= (k[0] === 'b' ? R.backend.length : R.ae.length);
-function currentWeek(p) {
-  const len = p === 'b' ? R.backend.length : R.ae.length;
-  for (let i = 1; i <= len; i++) if (!(S.weeks[p + i] && S.weeks[p + i].done)) return i;
-  return len;
-}
+const wkey = (t, n) => `${t.id}#${n}`;
+const trackById = id => P.tracks.find(t => t.id === id);
+const weekItems = (t, n) => { const w = t.weeks[n - 1]; return (w.checklist && w.checklist.length ? w.checklist : ['Week complete']).map((label, i) => ({ id: 'i' + i, label })); };
+function currentWeek(t) { for (let i = 1; i <= t.weeks.length; i++) if (!(S.weeks[wkey(t, i)] && S.weeks[wkey(t, i)].done)) return i; return t.weeks.length; }
+const doneCount = t => t.weeks.filter((_, i) => S.weeks[wkey(t, i + 1)] && S.weeks[wkey(t, i + 1)].done).length;
 const calendarWeek = () => Math.max(1, Math.floor(diffDays(S.startDate, today()) / 7) + 1);
-const doneCount = p => Object.keys(S.weeks).filter(k => k[0] === p && S.weeks[k].done).length;
+const weekOrder = () => { const s = DAYS.indexOf(P.meta.weekStartsOn === 'sun' ? 'sun' : 'mon'); return [...DAYS.slice(s), ...DAYS.slice(0, s)]; };
 
 function tasksFor(date) {
-  const wd = parse(date).getDay();
-  const bw = currentWeek('b'), aw = currentWeek('a');
-  const B = R.backend[bw - 1], A = R.ae[aw - 1], DB = D.backend[bw - 1], DA = D.ae[aw - 1];
-  let list;
-  if (wd === 6) list = [
-    { id: 'payflow', label: 'PayFlow build', detail: B.b, min: 120, subs: DB.p },
-    { id: 'ae', label: 'After Effects study', detail: 'Break down one piece of motion work you love, frame by frame', min: 30,
-      subs: ['Pick a piece on Motionographer or Vimeo Staff Picks', 'Watch it at 0.25x and list every move with rough timings', 'Note 2 techniques you want to steal this month'] }];
-  else if (wd === 0) list = [
-    { id: 'review', label: "Review the week's notes", detail: 'Re-answer every limit question without looking', min: 45,
-      subs: ["Re-read this week's five-question notes", 'Answer without notes: ' + B.q, 'Write down the weak spots to revisit next week'] },
-    { id: 'mock', label: 'Whiteboard one design, timed', detail: B.sd, min: 45,
-      subs: ['Pick the design: ' + B.sd, 'Set a 35-minute timer and whiteboard it out loud', 'Compare with the reference solution and note 3 gaps'] },
-    { id: 'shorts', label: 'Record 1–2 shorts', detail: "Turn this week's best note into a 45-second video", min: 30,
-      subs: ["Pick the week's best note", 'Write a 2-second hook and a 3-beat script', 'Record 1–2 takes', 'Edit and post (or schedule)'] }];
-  else {
-    const i = wd - 1;
-    list = [
-      { id: 'core', label: 'Core topic', detail: B.t, min: 75, subs: DB.c[i] },
-      { id: 'sd', label: 'System design', detail: B.sd, min: 30, subs: DB.s[i] },
-      { id: 'note', label: 'Five-question note', detail: 'On today\'s core topic: ' + B.t, min: 15,
-        subs: ['Problem: what pain does today\'s topic solve?', 'Mechanism: how does it work one level down?', 'Limits: where does it break?', 'Trade-off: what do you give up, and what are the alternatives?', 'Interview signal: which question would trigger this?'] },
-      wd === 5
-        ? { id: 'ae', label: 'AE remix day', detail: 'One scene, 3 versions, one variable changed', min: 30,
-            subs: ['Pick one beat from this week\'s AE work (' + A.t + ')', 'Version 1: change the direction', 'Version 2: change the method (scale, mask, morph)', 'Version 3: change the timing', 'Write one line: which wins and why'] }
-        : { id: 'ae', label: 'After Effects', detail: `${A.t}: ${A.make}`, min: 30, subs: DA.d[Math.min(i, 3)] }];
-  }
-  return list.map(t => ({ ...t, subs: t.subs.map((label, j) => ({ id: `${t.id}.${j}`, label })) }));
+  const wd = DAYS[parse(date).getDay()];
+  const order = weekOrder();
+  return (P.rhythm[wd] || []).map(task => {
+    const t = task.track ? trackById(task.track) : null;
+    const n = t ? currentWeek(t) : 0;
+    const W = t ? t.weeks[n - 1] : {};
+    let occ = 0;
+    for (const d of order) { if (d === wd) break; if ((P.rhythm[d] || []).some(x => x.id === task.id)) occ++; }
+    const ctx = { week: Object.assign({}, W, { number: n }), track: t ? { name: t.name, id: t.id } : {}, name: name() };
+    let subs = W && W.days && W.days[task.id] && W.days[task.id][occ];
+    if (!subs) subs = task.subtasks || (W && W.days && W.days[task.id] && W.days[task.id][W.days[task.id].length - 1]) || [];
+    return {
+      id: task.id, label: fill(task.label, ctx), detail: fill(task.detail || '', ctx), min: task.minutes || 0, track: task.track || null,
+      subs: subs.map((label, j) => ({ id: `${task.id}.${j}`, label: fill(label, ctx) }))
+    };
+  });
 }
-const day = d => S.days[d] || (S.days[d] = { done: {}, note: '', reported: false });
+const day = d => S.days[d] || (S.days[d] = { done: {}, subs: {}, note: '', reported: false });
 function dayScore(d) {
   const e = S.days[d]; if (!e) return 0;
   const t = e.total || tasksFor(d).length;
-  const n = Object.values(e.done).filter(Boolean).length;
+  const n = Object.values(e.done || {}).filter(Boolean).length;
   return t ? Math.min(1, n / t) : 0;
 }
 function streak() {
@@ -106,126 +130,145 @@ function streak() {
   while (d >= S.startDate && dayScore(d) >= 0.5) { s++; d = addDays(d, -1); }
   return s;
 }
+const habitById = id => P.habits.find(h => h.id === id);
+const habitCount = (e, id) => (e && e.habits && e.habits[id]) || 0;
+function habitStreak(h) {
+  let s = 0, d = today();
+  if (habitCount(S.days[d], h.id) < h.target) d = addDays(d, -1);
+  while (habitCount(S.days[d], h.id) >= h.target) { s++; d = addDays(d, -1); }
+  return s;
+}
+function heatCount(e, m) {
+  if (!e) return 0;
+  if (m.habit) return habitCount(e, m.habit);
+  const subs = e.subs || {}, keys = Object.keys(subs);
+  if (keys.length) return keys.filter(k => subs[k] && m.tasks.includes(k.split('.')[0])).length;
+  return Object.keys(e.done || {}).filter(k => e.done[k] && m.tasks.includes(k)).length * 2;
+}
+function heatStreak(m) {
+  let s = 0, d = today();
+  if (!heatCount(S.days[d], m)) d = addDays(d, -1);
+  while (heatCount(S.days[d], m) > 0) { s++; d = addDays(d, -1); }
+  return s;
+}
 
 function state() {
-  const t = today(), y = addDays(t, -1), bw = currentWeek('b'), aw = currentWeek('a'), cw = calendarWeek();
+  const t = today(), y = addDays(t, -1), cw = calendarWeek(), first = P.tracks[0];
   return {
-    name: S.name, startDate: S.startDate, autoStart: S.autoStart, today: t, yesterday: y,
+    name: name(), startDate: S.startDate, autoStart: S.autoStart, today: t, yesterday: y,
     needsCheckin: S.lastCheckin !== t,
     needsReport: y >= S.startDate && !(S.days[y] && S.days[y].reported),
     daysAway: S.lastCheckin ? diffDays(S.lastCheckin, t) : 0,
-    todayTasks: tasksFor(t), yesterdayTasks: tasksFor(y),
-    days: S.days, weeks: S.weeks, bw, aw, calendarWeek: cw,
-    behind: Math.max(0, Math.min(cw, R.backend.length) - bw),
-    streak: streak(), backend: R.backend, ae: R.ae, line: S.lastLine,
-    doneB: doneCount('b'), doneA: doneCount('a'), port: PORT,
-    streaks: Object.fromEntries(['java', 'sd', 'ae', 'dsa'].map(c => [c, catStreak(e => catCount(e, c) > 0)])),
-    version: VERSION, update: { status: upd.status, latest: upd.latest, notes: upd.notes, error: upd.error, checkedAt: upd.checkedAt }
+    todayTasks: tasksFor(t), yesterdayTasks: tasksFor(y), days: S.days, weeks: S.weeks,
+    tracks: P.tracks.map(tr => ({ id: tr.id, name: tr.name, color: tr.color || null, total: tr.weeks.length, current: currentWeek(tr), done: doneCount(tr),
+      weeks: tr.weeks.map((w, i) => ({ title: w.title, limitQuestion: w.limitQuestion || '', goal: w.goal || '', items: weekItems(tr, i + 1) })) })),
+    calendarWeek: cw, behind: Math.max(0, Math.min(cw, first.weeks.length) - currentWeek(first)),
+    streak: streak(), line: S.lastLine,
+    habits: P.habits.map(h => ({ ...h, streak: habitStreak(h) })),
+    heatmaps: P.heatmaps.map(m => ({ ...m, streak: heatStreak(m), counts: Object.fromEntries(Object.keys(S.days).map(k => [k, heatCount(S.days[k], m)])) })),
+    plan: { title: P.meta.title, description: P.meta.description || '', source: planInfo.source, errors: planInfo.errors, warnings: planInfo.warnings, animation: P.ui.heatmapAnimation },
+    port: PORT, version: VERSION, update: { status: upd.status, latest: upd.latest, notes: upd.notes, error: upd.error, checkedAt: upd.checkedAt }
   };
 }
 
+function celebrate(kind, text) { if (kind && kind !== 'none') overlay(kind, text); }
 function afterChange(d) {
   const e = day(d);
   e.total = tasksFor(d).length;
-  if (d === today() && dayScore(d) >= 1 && !e.fullCelebrated) {
-    e.fullCelebrated = true;
-    S.lastLine = pick(L.dayDone);
-    save();
-    overlay('confetti', S.lastLine);
+  if (d === today() && e.total && dayScore(d) >= 1 && !e.fullCelebrated) {
+    e.fullCelebrated = true; S.lastLine = msg('dayDone'); save();
+    celebrate(P.coach.celebrations.dayComplete, S.lastLine);
   }
   save();
 }
 function setTask(d, id, v) {
   const e = day(d), t = tasksFor(d).find(x => x.id === id);
-  e.subs = e.subs || {};
-  e.done[id] = !!v;
-  if (t) t.subs.forEach(s => { e.subs[s.id] = !!v; });
-  afterChange(d);
+  if (!t) return false;
+  e.subs = e.subs || {}; e.done[id] = !!v;
+  t.subs.forEach(s => { e.subs[s.id] = !!v; });
+  afterChange(d); return true;
 }
 function setSub(d, subId, v) {
   const e = day(d), pid = String(subId).split('.')[0], t = tasksFor(d).find(x => x.id === pid);
   if (!t || !t.subs.some(s => s.id === subId)) return false;
-  e.subs = e.subs || {};
-  e.subs[subId] = !!v;
-  e.done[pid] = t.subs.every(s => e.subs[s.id]);
-  afterChange(d);
-  return true;
+  e.subs = e.subs || {}; e.subs[subId] = !!v;
+  e.done[pid] = t.subs.length ? t.subs.every(s => e.subs[s.id]) : !!v;
+  afterChange(d); return true;
 }
-function setDsa(d, { count, add, problem }) {
+function setHabit(d, id, { count, add, item }) {
+  const h = habitById(id); if (!h) return false;
   const e = day(d);
-  e.dsaList = e.dsaList || [];
-  if (str(problem, 120).trim()) { e.dsaList.push(str(problem, 120).trim()); if (add === undefined && count === undefined) add = 1; }
-  if (typeof count === 'number' && count >= 0) e.dsa = Math.min(50, Math.floor(count));
-  else e.dsa = Math.max(0, Math.min(50, (e.dsa || 0) + (Number(add) || 0)));
-  if (d === today() && e.dsa >= 1 && !e.dsaCelebrated) { e.dsaCelebrated = true; save(); overlay('boost', e.dsa >= 2 ? 'Two DSA problems today. That\'s the habit.' : 'DSA done for today. One a day adds up to 365.'); }
-  save();
+  e.habits = e.habits || {}; e.habitLog = e.habitLog || {};
+  if (str(item, 120).trim()) { (e.habitLog[id] = e.habitLog[id] || []).push(str(item, 120).trim()); if (add === undefined && count === undefined) add = 1; }
+  const before = e.habits[id] || 0;
+  if (typeof count === 'number' && Number.isFinite(count) && count >= 0) e.habits[id] = Math.min(999, Math.floor(count));
+  else e.habits[id] = Math.max(0, Math.min(999, before + (Number(add) || 0)));
+  if (id === 'dsa') e.dsa = e.habits[id]; // keep older readers working
+  const now = e.habits[id];
+  e.habitCelebrated = e.habitCelebrated || {};
+  if (d === today() && now >= h.target && !e.habitCelebrated[id]) { e.habitCelebrated[id] = 1; save(); celebrate(P.coach.celebrations.habitTarget, (h.messages && h.messages.target) || `${h.name}: target hit for today.`); }
+  else if (d === today() && now >= h.great && e.habitCelebrated[id] === 1) { e.habitCelebrated[id] = 2; save(); celebrate(P.coach.celebrations.habitTarget, (h.messages && h.messages.great) || `${h.name}: great day.`); }
+  save(); return true;
 }
-function catStreak(fn) {
-  let s = 0, d = today();
-  if (!fn(S.days[d])) d = addDays(d, -1);
-  while (fn(S.days[d])) { s++; d = addDays(d, -1); }
-  return s;
-}
-const CAT = { java: ['core', 'note', 'payflow', 'review', 'shorts'], sd: ['sd', 'mock'], ae: ['ae'] };
-const catCount = (e, c) => !e ? 0 : c === 'dsa' ? (e.dsa || 0) : Object.keys(e.subs || {}).filter(k => e.subs[k] && CAT[c].includes(k.split('.')[0])).length;
 
 function doCheckin(p = {}) {
   const t = today();
   const d = isDate(p.date) ? p.date : addDays(t, -1);
   let verdict = null;
-  if ((p.done || p.note || p.date || p.dsa !== undefined) && d >= S.startDate && d < t) {
+  if ((p.done || p.note || p.date || p.habits) && d >= S.startDate && d < t) {
     const e = day(d);
     if (p.done) {
       const ids = Array.isArray(p.done) ? p.done : Object.keys(p.done).filter(k => p.done[k]);
-      e.done = {};
-      e.subs = e.subs || {};
-      for (const t of tasksFor(d)) {
-        if (ids.includes(t.id)) { e.done[t.id] = true; t.subs.forEach(x => { e.subs[x.id] = true; }); }
-        else if (t.subs.every(x => e.subs[x.id])) t.subs.forEach(x => { e.subs[x.id] = false; });
+      e.done = {}; e.subs = e.subs || {};
+      for (const tk of tasksFor(d)) {
+        if (ids.includes(tk.id)) { e.done[tk.id] = true; tk.subs.forEach(x => { e.subs[x.id] = true; }); }
+        else if (tk.subs.length && tk.subs.every(x => e.subs[x.id])) tk.subs.forEach(x => { e.subs[x.id] = false; });
       }
     }
+    if (p.habits && typeof p.habits === 'object') for (const [k, v] of Object.entries(p.habits)) if (habitById(k) && v !== '' && !isNaN(+v)) { e.habits = e.habits || {}; e.habits[k] = Math.max(0, Math.min(999, Math.floor(+v))); if (k === 'dsa') e.dsa = e.habits[k]; }
     if (str(p.note, 1000)) e.note = str(p.note, 1000);
-    if (p.dsa !== undefined && p.dsa !== '' && !isNaN(+p.dsa)) e.dsa = Math.max(0, Math.min(50, Math.floor(+p.dsa)));
-    e.total = tasksFor(d).length;
-    e.reported = true;
+    e.total = tasksFor(d).length; e.reported = true;
     const sc = dayScore(d);
-    verdict = sc >= 1 ? { kind: 'confetti', msg: pick(L.good) } : sc >= 0.5 ? { kind: 'boost', msg: pick(L.ok) } : { kind: 'scold', msg: pick(L.bad) };
+    verdict = sc >= 1 ? { kind: 'confetti', msg: msg('good') } : sc >= 0.5 ? { kind: 'boost', msg: msg('ok') } : { kind: 'scold', msg: msg('bad') };
   }
-  S.lastCheckin = t;
-  S.lastLine = verdict ? verdict.msg : pick(L.start);
+  S.lastCheckin = t; S.lastLine = verdict ? verdict.msg : msg('start');
   save();
   if (verdict) overlay(verdict.kind, verdict.msg);
   return { state: state(), verdict };
 }
 
-function setWeekItem(k, item, v) {
-  if (!validWeek(k)) return false;
-  const w = wk(k), items = wkItems(k);
+function setWeekItem(trackId, n, item, v) {
+  const t = trackById(trackId); n = +n;
+  if (!t || !(n >= 1 && n <= t.weeks.length)) return false;
+  const key = wkey(t, n), w = S.weeks[key] || (S.weeks[key] = { items: {}, done: false }), items = weekItems(t, n).map(x => x.id);
   if (item === '__all') items.forEach(i => { w.items[i] = !!v; });
   else if (items.includes(item)) w.items[item] = !!v;
   else return false;
   const all = items.every(i => w.items[i]), was = w.done;
   w.done = all;
-  if (all && !was) { w.doneAt = today(); save(); celebrateWeek(k); } else save();
+  if (all && !was) {
+    w.doneAt = today();
+    const left = t.weeks.length - doneCount(t);
+    S.lastLine = `${t.name} week ${n} done: ${t.weeks[n - 1].title}. ${left > 0 ? left + ' to go.' : 'Whole track complete!'}`;
+    save(); celebrate(P.coach.celebrations.weekComplete, S.lastLine);
+  } else save();
   return true;
 }
-function celebrateWeek(k) {
-  const n = +k.slice(1), isB = k[0] === 'b';
-  const W = isB ? R.backend[n - 1] : R.ae[n - 1];
-  const left = (isB ? R.backend.length : R.ae.length) - doneCount(k[0]);
-  S.lastLine = `${isB ? 'Week' : 'AE week'} ${n} done: ${W.t}. ${left > 0 ? left + ' to go.' : 'Whole track complete!'}`;
-  save();
-  overlay('fireworks', S.lastLine);
-}
+const parseWeekRef = (ref, track, week) => {
+  if (track) return [track, week];
+  const s = String(ref || '');
+  let m = s.match(/^([a-z][a-z0-9_-]*)#(\d+)$/); if (m) return [m[1], +m[2]];
+  m = s.match(/^([a-z])(\d+)$/); if (m) return [m[1], +m[2]];
+  return [null, 0];
+};
 
 // ---------- windows ----------
 let win = null, tray = null, ov = null, quitting = false;
 const ICON = path.join(__dirname, 'icon.png');
-
 function showWin() {
   if (!win || win.isDestroyed()) {
     win = new BrowserWindow({
-      width: 1120, height: 780, minWidth: 720, minHeight: 560, show: false, icon: ICON,
+      width: 1160, height: 820, minWidth: 720, minHeight: 560, show: false, icon: ICON,
       backgroundColor: '#070f26', autoHideMenuBar: true, title: 'Daily Coach',
       webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
     });
@@ -236,14 +279,12 @@ function showWin() {
     win.webContents.on('will-navigate', e => e.preventDefault());
   } else {
     if (win.isMinimized()) win.restore();
-    win.show(); win.focus();
-    win.webContents.send('refresh');
+    win.show(); win.focus(); win.webContents.send('refresh');
   }
 }
 const refreshWin = () => { if (win && !win.isDestroyed()) win.webContents.send('refresh'); };
-
-function overlay(kind, msg) {
-  S.events.push({ at: new Date().toISOString(), kind, msg: str(msg) });
+function overlay(kind, text) {
+  S.events.push({ at: new Date().toISOString(), kind, msg: str(text) });
   if (S.events.length > 60) S.events = S.events.slice(-60);
   save();
   if (ov && !ov.isDestroyed()) ov.destroy();
@@ -255,63 +296,56 @@ function overlay(kind, msg) {
   });
   ov.setAlwaysOnTop(true, 'screen-saver');
   ov.setIgnoreMouseEvents(true);
-  ov.loadFile(path.join(__dirname, 'overlay.html'), { query: { kind, msg: str(msg) } });
+  ov.loadFile(path.join(__dirname, 'overlay.html'), { query: { kind, msg: str(text), name: name() } });
   ov.once('ready-to-show', () => ov && !ov.isDestroyed() && ov.showInactive());
   const mine = ov;
   setTimeout(() => { if (!mine.isDestroyed()) mine.destroy(); }, kind === 'fireworks' ? 9500 : 7000);
   refreshWin();
 }
-
 function buildTray() {
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
   tray.setToolTip('Daily Coach ' + VERSION);
-  const menu = () => Menu.buildFromTemplate([
+  tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open Daily Coach', click: showWin },
     { label: 'Test fireworks', click: () => overlay('fireworks', 'This is what finishing a week looks like.') },
     { label: 'Check for updates', click: () => checkForUpdates(true) },
     { type: 'separator' },
-    { label: 'Start with Windows', type: 'checkbox', checked: !!S.autoStart, click: i => { S.autoStart = i.checked; save(); applyLogin(); } },
+    { label: 'Start with computer', type: 'checkbox', checked: !!S.autoStart, click: i => { S.autoStart = i.checked; save(); applyLogin(); } },
     { label: 'Quit', click: () => { quitting = true; app.quit(); } }
-  ]);
-  tray.setContextMenu(menu());
+  ]));
   tray.on('click', showWin);
 }
 function applyLogin() {
   if (!app.isPackaged) return;
   app.setLoginItemSettings({ openAtLogin: !!S.autoStart, path: process.execPath, args: ['--startup'], name: 'DailyCoach' });
 }
-
-// Morning prompt + 9 pm nudge
 function tick() {
-  const t = today(), h = new Date().getHours();
-  if (S.lastCheckin !== t && h >= 5 && S.promptDate !== t) { S.promptDate = t; save(); showWin(); }
-  if (h >= 21 && S.nudgeDate !== t && t >= S.startDate) {
-    S.nudgeDate = t;
-    const sc = dayScore(t);
-    save();
-    const noDsa = !(S.days[t] && S.days[t].dsa);
-    if (sc >= 1 && noDsa) overlay('boost', 'All tasks done, but no DSA question yet. One problem before bed.');
-    if (sc < 1) {
-      const left = tasksFor(t).length - Object.values(day(t).done).filter(Boolean).length;
-      overlay(sc < 0.5 ? 'scold' : 'boost', `${left} task${left === 1 ? '' : 's'} still open today${noDsa ? ', and no DSA question yet' : ''}. ${pick(sc < 0.5 ? L.nudgeHard : L.nudgeSoft)}`);
-    }
+  const t = today(), now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
+  const from = hm(P.schedule.checkinFrom), nudge = hm(P.schedule.nudgeAt);
+  if (from !== null && S.lastCheckin !== t && mins >= from && S.promptDate !== t) { S.promptDate = t; save(); showWin(); }
+  if (nudge !== null && mins >= nudge && S.nudgeDate !== t && t >= S.startDate) {
+    S.nudgeDate = t; save();
+    const sc = dayScore(t), tasks = tasksFor(t);
+    const lagging = P.habits.filter(h => h.nudge !== false && habitCount(S.days[t], h.id) < h.target).map(h => h.name);
+    const left = tasks.length - Object.values(day(t).done).filter(Boolean).length;
+    if (tasks.length && sc < 1) overlay(sc < 0.5 ? 'scold' : 'boost', `${left} task${left === 1 ? '' : 's'} still open today${lagging.length ? `, and nothing logged for ${lagging.join(', ')}` : ''}. ${msg(sc < 0.5 ? 'nudgeHard' : 'nudgeSoft')}`);
+    else if (lagging.length) overlay('boost', `All tasks done, but nothing logged for ${lagging.join(', ')} yet.`);
   }
 }
 
-// ---------- local API for Claude Code ----------
+// ---------- local API (Claude Code) ----------
 function summary() {
-  const s = state(), t = s.today;
-  const B = R.backend[s.bw - 1], A = R.ae[s.aw - 1];
-  const wkInfo = (k, W) => ({ key: k, title: W.t, done: !!(S.weeks[k] && S.weeks[k].done), items: wkItems(k).map(i => ({ id: i, done: !!(S.weeks[k] && S.weeks[k].items[i]) })) });
+  const s = state(), t = s.today, e = S.days[t] || {};
   return {
-    today: t, streak: s.streak, calendarWeek: s.calendarWeek, behindByWeeks: s.behind,
+    plan: s.plan.title, today: t, streak: s.streak, calendarWeek: s.calendarWeek, behindByWeeks: s.behind,
     lastCheckin: S.lastCheckin, checkedInToday: !s.needsCheckin,
-    todayTasks: s.todayTasks.map(x => ({ id: x.id, label: x.label, detail: x.detail, min: x.min, done: !!(S.days[t] && S.days[t].done[x.id]), subtasks: x.subs.map(y => ({ id: y.id, label: y.label, done: !!(S.days[t] && S.days[t].subs && S.days[t].subs[y.id]) })) })),
-    backendWeek: { number: s.bw, limitQuestion: B.q, learn: B.l, build: B.b, systemDesign: B.sd, ...wkInfo('b' + s.bw, B) },
-    aeWeek: { number: s.aw, make: A.make, ...wkInfo('a' + s.aw, A) },
-    weeksDone: { backend: s.doneB, ae: s.doneA, backendTotal: R.backend.length, aeTotal: R.ae.length },
-    dsa: { today: (S.days[t] && S.days[t].dsa) || 0, problemsToday: (S.days[t] && S.days[t].dsaList) || [], streak: catStreak(e => catCount(e, 'dsa') > 0) },
-    categoryStreaks: s.streaks,
+    todayTasks: s.todayTasks.map(x => ({ id: x.id, label: x.label, detail: x.detail, min: x.min, done: !!(e.done && e.done[x.id]),
+      subtasks: x.subs.map(y => ({ id: y.id, label: y.label, done: !!(e.subs && e.subs[y.id]) })) })),
+    tracks: P.tracks.map(tr => { const n = currentWeek(tr), w = tr.weeks[n - 1], st = S.weeks[wkey(tr, n)] || { items: {} };
+      return { id: tr.id, name: tr.name, week: n, of: tr.weeks.length, weeksDone: doneCount(tr), ref: wkey(tr, n), title: w.title, limitQuestion: w.limitQuestion || null,
+        checklist: weekItems(tr, n).map(i => ({ id: i.id, label: i.label, done: !!st.items[i.id] })) }; }),
+    habits: P.habits.map(h => ({ id: h.id, name: h.name, unit: h.unit, target: h.target, today: habitCount(e, h.id), items: (e.habitLog && e.habitLog[h.id]) || [], streak: habitStreak(h) })),
+    heatmapStreaks: Object.fromEntries(P.heatmaps.map(m => [m.id, heatStreak(m)])),
     last7: logDays(7), lastCoachLine: S.lastLine
   };
 }
@@ -322,64 +356,69 @@ function logDays(n) {
     const d = addDays(today(), -i);
     if (d < S.startDate) break;
     const e = S.days[d];
-    out.push({ date: d, score: Math.round(dayScore(d) * 100), subtasksDone: e && e.subs ? Object.values(e.subs).filter(Boolean).length : 0, dsa: (e && e.dsa) || 0, dsaProblems: (e && e.dsaList) || [], done: e ? Object.keys(e.done).filter(k => e.done[k]) : [], note: e ? e.note : '', reported: !!(e && e.reported) });
+    out.push({ date: d, score: Math.round(dayScore(d) * 100), done: e ? Object.keys(e.done || {}).filter(k => e.done[k]) : [],
+      subtasksDone: e && e.subs ? Object.values(e.subs).filter(Boolean).length : 0, habits: (e && e.habits) || {}, note: e ? e.note : '', reported: !!(e && e.reported) });
   }
   return out;
 }
-
 function startServer() {
   const srv = http.createServer((req, res) => {
     const send = (c, o) => { res.writeHead(c, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o, null, 1)); };
-    // Block web pages: browsers always send Origin on cross-site requests.
     if (req.headers.origin) return send(403, { error: 'browser requests are not allowed' });
     const u = new URL(req.url, 'http://127.0.0.1');
     if (req.method === 'GET') {
       if (u.pathname === '/status') return send(200, summary());
       if (u.pathname === '/log') return send(200, logDays(+u.searchParams.get('days') || 7));
-      if (u.pathname === '/') return send(200, { app: 'Daily Coach', endpoints: ['GET /status', 'GET /log?days=7', 'POST /celebrate', 'POST /boost', 'POST /scold', 'POST /message', 'POST /complete', 'POST /checkin', 'POST /week-item', 'POST /open', 'POST /update', 'POST /dsa'], version: VERSION });
+      if (u.pathname === '/plan') return send(200, { title: P.meta.title, source: planInfo.source, errors: planInfo.errors, warnings: planInfo.warnings, plan: P });
+      if (u.pathname === '/') return send(200, { app: 'Daily Coach', version: VERSION, endpoints: ['GET /status', 'GET /log?days=7', 'GET /plan', 'POST /plan', 'POST /plan/reset', 'POST /celebrate', 'POST /boost', 'POST /scold', 'POST /message', 'POST /complete', 'POST /checkin', 'POST /week-item', 'POST /habit', 'POST /open', 'POST /update'] });
       return send(404, { error: 'not found' });
     }
     if (req.method !== 'POST') return send(405, { error: 'use GET or POST' });
     let body = '';
-    req.on('data', c => { body += c; if (body.length > 1e5) req.destroy(); });
+    req.on('data', c => { body += c; if (body.length > 5e6) req.destroy(); });
     req.on('end', () => {
+      if (u.pathname === '/plan') { const r = installPlan(body); return send(r.ok ? 200 : 400, r); }
+      if (u.pathname === '/plan/reset') return send(200, resetPlan());
       let j = {};
       try { j = body ? JSON.parse(body) : {}; } catch { return send(400, { error: 'invalid JSON' }); }
       for (const [k, v] of u.searchParams) if (j[k] === undefined) j[k] = v;
-      const msg = str(j.message);
+      const m = str(j.message);
+      const yes = j.done !== false && j.done !== 'false';
       switch (u.pathname) {
-        case '/celebrate': overlay(j.style === 'confetti' ? 'confetti' : 'fireworks', msg || pick(L.praise)); break;
-        case '/boost': overlay('boost', msg || pick(L.boost)); break;
-        case '/scold': overlay('scold', msg || pick(L.scold)); break;
-        case '/message': overlay('message', msg || 'Hello from Claude.'); break;
+        case '/celebrate': overlay(j.style === 'confetti' ? 'confetti' : 'fireworks', m || msg('praise')); break;
+        case '/boost': overlay('boost', m || msg('boost')); break;
+        case '/scold': overlay('scold', m || msg('scold')); break;
+        case '/message': overlay('message', m || 'Hello from Claude.'); break;
         case '/open': showWin(); break;
-        case '/dsa': setDsa(isDate(j.date) ? j.date : today(), { count: j.count !== undefined ? +j.count : undefined, add: j.add, problem: j.problem }); break;
-        case '/update': { checkForUpdates(false).then(u => send(200, { current: VERSION, ...u })); return; }
+        case '/update': checkForUpdates(false).then(x => send(200, { current: VERSION, ...x })); return;
         case '/complete': {
           const d = isDate(j.date) ? j.date : today();
           const ids = Array.isArray(j.tasks) ? j.tasks.map(String) : String(j.tasks || j.task || '').split(',').map(x => x.trim()).filter(Boolean);
-          const tl = tasksFor(d), valid = tl.flatMap(x => [x.id, ...x.subs.map(y => y.id)]);
+          const valid = tasksFor(d).flatMap(x => [x.id, ...x.subs.map(y => y.id)]);
           const bad = ids.filter(i => !valid.includes(i));
           if (!ids.length || bad.length) return send(400, { error: 'unknown task or subtask id', valid });
-          const v = j.done !== false && j.done !== 'false';
-          ids.forEach(i => (i.includes('.') ? setSub(d, i, v) : setTask(d, i, v)));
+          ids.forEach(i => (i.includes('.') ? setSub(d, i, yes) : setTask(d, i, yes)));
           break;
         }
-        case '/checkin': { const r = doCheckin({ date: j.date, done: j.done, note: j.note }); refreshWin(); return send(200, { ok: true, verdict: r.verdict }); }
+        case '/checkin': { const r = doCheckin({ date: j.date, done: j.done, note: j.note, habits: j.habits }); refreshWin(); return send(200, { ok: true, verdict: r.verdict }); }
         case '/week-item': {
-          if (!setWeekItem(String(j.week || ''), String(j.item || ''), j.done !== false && j.done !== 'false')) return send(400, { error: 'unknown week or item (week like "b5" or "a3"; item like "l0", "b", "sd", "learn", "make" or "__all")' });
+          const [tid, n] = parseWeekRef(j.week, j.track, j.weekNumber);
+          if (!setWeekItem(tid, n, String(j.item || ''), yes)) return send(400, { error: 'unknown week or item. Use {"week":"<track>#<n>","item":"i0"} or item "__all"' });
+          break;
+        }
+        case '/habit': case '/dsa': {
+          const id = u.pathname === '/dsa' ? 'dsa' : String(j.id || '');
+          if (!setHabit(isDate(j.date) ? j.date : today(), id, { count: j.count !== undefined ? +j.count : undefined, add: j.add, item: j.item || j.problem })) return send(400, { error: 'unknown habit', habits: P.habits.map(h => h.id) });
           break;
         }
         default: return send(404, { error: 'not found' });
       }
-      refreshWin();
-      send(200, { ok: true });
+      refreshWin(); send(200, { ok: true });
     });
   });
   srv.on('error', e => console.error('API server error', e.message));
   srv.listen(PORT, '127.0.0.1');
 }
-
 
 // ---------- auto-update from GitHub ----------
 const UPDATE_BASE = process.env.DAILYCOACH_UPDATE_BASE || 'https://raw.githubusercontent.com/ENAMINE1/daily-coach/main/app/';
@@ -392,11 +431,10 @@ async function fetchBuf(url) {
   const r = await net.fetch(url + '?t=' + Date.now(), { cache: 'no-store' });
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url.split('/').pop()}`);
   const b = Buffer.from(await r.arrayBuffer());
-  if (b.length > 3 * 1024 * 1024) throw new Error('file too large');
+  if (b.length > 8 * 1024 * 1024) throw new Error('file too large');
   return b;
 }
-function stagingDir() { return path.join(app.getPath('userData'), 'update-staging'); }
-
+const stagingDir = () => path.join(app.getPath('userData'), 'update-staging');
 async function checkForUpdates(manual) {
   if (upd.status === 'checking' || upd.status === 'downloading') return upd;
   upd = { ...upd, status: 'checking', error: '' };
@@ -406,70 +444,51 @@ async function checkForUpdates(manual) {
     if (!m.version || !m.files || !newer(m.version, VERSION)) { upd.status = 'current'; upd.latest = m.version || VERSION; if (manual) overlay('message', `You're on the latest version (${VERSION}).`); return upd; }
     upd = { ...upd, status: 'downloading', latest: m.version, notes: str(m.notes, 400) };
     const dir = stagingDir();
-    fs.rmSync(dir, { recursive: true, force: true });
-    fs.mkdirSync(dir, { recursive: true });
-    for (const [name, hash] of Object.entries(m.files)) {
-      if (!SAFE.test(name) || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('bad manifest entry ' + name);
-      const local = path.join(__dirname, name);
+    fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
+    for (const [f, hash] of Object.entries(m.files)) {
+      if (!SAFE.test(f) || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('bad manifest entry ' + f);
+      const local = path.join(__dirname, f);
       if (fs.existsSync(local) && sha(fs.readFileSync(local)) === hash) continue;
-      const b = await fetchBuf(UPDATE_BASE + name);
-      if (sha(b) !== hash) throw new Error('checksum mismatch for ' + name);
-      fs.writeFileSync(path.join(dir, name), b);
+      const b = await fetchBuf(UPDATE_BASE + f);
+      if (sha(b) !== hash) throw new Error('checksum mismatch for ' + f);
+      fs.writeFileSync(path.join(dir, f), b);
     }
     fs.writeFileSync(path.join(dir, '.version'), m.version);
-    upd.status = 'ready';
-    refreshWin();
-    // apply straight away if you're not looking at the window
+    upd.status = 'ready'; refreshWin();
     if (!win || win.isDestroyed() || !win.isVisible()) applyUpdate();
-  } catch (e) {
-    upd.status = 'error'; upd.error = e.message;
-    if (manual) overlay('message', 'Update check failed: ' + e.message);
-  }
-  refreshWin();
-  return upd;
+  } catch (e) { upd.status = 'error'; upd.error = e.message; if (manual) overlay('message', 'Update check failed: ' + e.message); }
+  refreshWin(); return upd;
 }
-
 function applyUpdate() {
   const dir = stagingDir();
   if (!fs.existsSync(path.join(dir, '.version'))) return false;
   const ver = fs.readFileSync(path.join(dir, '.version'), 'utf8').trim();
   const files = fs.readdirSync(dir).filter(f => f !== '.version' && SAFE.test(f));
   const backup = path.join(app.getPath('userData'), 'update-backup');
-  fs.rmSync(backup, { recursive: true, force: true });
-  fs.mkdirSync(backup, { recursive: true });
+  fs.rmSync(backup, { recursive: true, force: true }); fs.mkdirSync(backup, { recursive: true });
   const done = [];
   try {
     for (const f of files) {
       const target = path.join(__dirname, f);
       if (fs.existsSync(target)) fs.copyFileSync(target, path.join(backup, f));
-      fs.copyFileSync(path.join(dir, f), target);
-      done.push(f);
+      fs.copyFileSync(path.join(dir, f), target); done.push(f);
     }
   } catch (e) {
-    for (const f of done) { const b = path.join(backup, f); const t = path.join(__dirname, f); if (fs.existsSync(b)) fs.copyFileSync(b, t); else fs.rmSync(t, { force: true }); }
-    upd.status = 'error'; upd.error = 'install failed, rolled back: ' + e.message;
-    return false;
+    for (const f of done) { const b = path.join(backup, f), t = path.join(__dirname, f); if (fs.existsSync(b)) fs.copyFileSync(b, t); else fs.rmSync(t, { force: true }); }
+    upd.status = 'error'; upd.error = 'install failed, rolled back: ' + e.message; return false;
   }
   fs.rmSync(dir, { recursive: true, force: true });
-  S.justUpdated = { from: VERSION, to: ver, notes: upd.notes };
-  save();
+  S.justUpdated = { from: VERSION, to: ver, notes: upd.notes }; save();
   quitting = true;
   app.relaunch({ args: process.argv.slice(1).filter(a => a !== '--startup').concat(win && win.isVisible() ? [] : ['--startup']) });
-  app.exit(0);
-  return true;
+  app.exit(0); return true;
 }
-
-// keep the Claude Code skill in sync with the app version
 function syncSkill() {
   try {
-    const src = path.join(__dirname, 'SKILL.md');
-    if (!fs.existsSync(src)) return;
-    const dir = path.join(os.homedir(), '.claude', 'skills', 'daily-coach');
-    const dst = path.join(dir, 'SKILL.md');
-    const b = fs.readFileSync(src);
+    const src = path.join(__dirname, 'SKILL.md'); if (!fs.existsSync(src)) return;
+    const dir = path.join(os.homedir(), '.claude', 'skills', 'daily-coach'), dst = path.join(dir, 'SKILL.md'), b = fs.readFileSync(src);
     if (fs.existsSync(dst) && sha(fs.readFileSync(dst)) === sha(b)) return;
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(dst, b);
+    fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(dst, b);
   } catch (e) { console.error('skill sync failed', e.message); }
 }
 
@@ -477,17 +496,18 @@ function syncSkill() {
 ipcMain.handle('state', () => state());
 ipcMain.handle('toggleTask', (_, d, id, v) => { if (isDate(d) && typeof id === 'string') setTask(d, id, v); return state(); });
 ipcMain.handle('toggleSub', (_, d, id, v) => { if (isDate(d) && typeof id === 'string') setSub(d, id, v); return state(); });
-ipcMain.handle('dsa', (_, d, o) => { if (isDate(d)) setDsa(d, o || {}); return state(); });
+ipcMain.handle('habit', (_, d, id, o) => { if (isDate(d)) setHabit(d, String(id), o || {}); return state(); });
+ipcMain.handle('weekItem', (_, tid, n, item, v) => { setWeekItem(tid, n, item, v); return state(); });
+ipcMain.handle('checkin', (_, p) => doCheckin(p || {}));
+ipcMain.handle('importPlan', (_, text) => installPlan(String(text || '')));
+ipcMain.handle('resetPlan', () => resetPlan());
 ipcMain.handle('checkUpdate', () => checkForUpdates(true));
 ipcMain.handle('applyUpdate', () => applyUpdate());
-ipcMain.handle('checkin', (_, p) => doCheckin(p || {}));
-ipcMain.handle('weekItem', (_, k, item, v) => { setWeekItem(k, item, v); return state(); });
 ipcMain.handle('settings', (_, s = {}) => {
   if (str(s.name, 40).trim()) S.name = str(s.name, 40).trim();
   if (isDate(s.startDate) && s.startDate <= today()) S.startDate = s.startDate;
   if (typeof s.autoStart === 'boolean') { S.autoStart = s.autoStart; applyLogin(); }
-  save();
-  return state();
+  save(); return state();
 });
 ipcMain.handle('test', (_, kind) => { overlay(['fireworks', 'confetti', 'boost', 'scold'].includes(kind) ? kind : 'fireworks', 'Preview: this is how it looks.'); });
 
@@ -496,21 +516,18 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', showWin);
-  app.setAppUserModelId('com.rahul.dailycoach');
+  app.setAppUserModelId('com.dailycoach.app');
   app.on('window-all-closed', () => { /* stay in tray */ });
   app.on('before-quit', () => { quitting = true; });
   app.whenReady().then(() => {
-    load();
-    applyLogin();
-    buildTray();
-    startServer();
-    syncSkill();
+    load(); loadPlan(); migrate(); save();
+    applyLogin(); buildTray(); startServer(); syncSkill();
     if (S.justUpdated) { const j = S.justUpdated; S.justUpdated = null; save(); setTimeout(() => overlay('confetti', `Updated to ${j.to}. ${j.notes || ''}`.trim()), 2500); }
-    setTimeout(() => checkForUpdates(false), 20000);
-    setInterval(() => checkForUpdates(false), 4 * 60 * 60 * 1000);
     if (!STARTUP) showWin();
     tick();
     setInterval(tick, 5 * 60 * 1000);
+    setTimeout(() => checkForUpdates(false), 20000);
+    setInterval(() => checkForUpdates(false), 4 * 60 * 60 * 1000);
     powerMonitor.on('resume', () => setTimeout(tick, 3000));
     powerMonitor.on('unlock-screen', () => setTimeout(tick, 1500));
   });

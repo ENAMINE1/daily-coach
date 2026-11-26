@@ -1,29 +1,46 @@
 # Daily Coach
 
-A small Windows tray app that keeps me accountable to my six-month backend + After Effects roadmap: morning check-ins, a detailed daily checklist, weekly targets with full-screen fireworks, a 365-day contribution graph, and a local API that Claude Code uses to cheer me on (or scold me).
+A desktop accountability app for anyone working through a long plan: a morning check-in, a detailed daily checklist, weekly targets with full-screen fireworks, daily habit counters, GitHub-style 365-day heatmaps, and a local API so Claude Code can cheer you on (or scold you).
 
-## How updates work
+Phones already have plenty of habit trackers. Daily Coach lives on the laptop where the work actually happens: it starts with your computer, sits in the tray, and celebrates on top of whatever you're doing.
 
-Installed apps check `app/manifest.json` on this repo's `main` branch at startup and every 4 hours (or via **Check for updates** in the tray or Settings). If the version is newer, the app downloads only the changed files, verifies every SHA-256 checksum, backs up the old files, swaps them in, and restarts itself. Progress data lives in `%APPDATA%\Daily Coach` and is never touched.
+## Make it yours
 
-The Claude Code skill (`app/SKILL.md`) is synced to `~/.claude/skills/daily-coach/` on every launch.
+Everything the app tracks comes from **one plan file** (YAML or JSON). You don't write it by hand: give [GUIDELINE.md](GUIDELINE.md) to Claude or another AI, describe your goal, and load the file it writes from **History & settings → Your plan**.
 
-## Releasing an update
+- [GUIDELINE.md](GUIDELINE.md): how plans work, plus a copy-paste prompt for an AI
+- [app/plan.schema.json](app/plan.schema.json): JSON Schema, so editors and AIs can validate plans
+- [examples/fitness-and-reading.yaml](examples/fitness-and-reading.yaml): a small complete plan
+- [app/plan.default.json](app/plan.default.json): a large plan (26 backend + 24 After Effects weeks with day-by-day subtasks)
+
+## Updates
+
+Installed apps check `app/manifest.json` on `main` at startup and every 4 hours. Newer versions download only the changed files, verify their SHA-256 checksums, back up the old files, swap them in, and restart. User data and plans live in the app's data folder and are never touched.
 
 ```bash
-# edit files in app/, then:
-node tools/release.mjs patch "One line describing the change"   # or minor / major / 1.4.0
+node tools/release.mjs patch "One line describing the change"   # or minor / major / x.y.z
 git add -A && git commit -m "Release x.y.z" && git push
 ```
 
-`release.mjs` bumps `app/package.json` and regenerates `app/manifest.json`. Never edit the manifest by hand.
+## Tech stack and direction
+
+Today: Electron (one codebase for Windows, macOS and Linux), plain JavaScript with no build step, so the auto-updater can ship individual files. Data is a JSON file per user, and the plan is validated by `app/plan.js`.
+
+Planned, in order:
+1. **TypeScript + Vite + a component framework (Svelte or React)** for the renderer, once the number of widgets grows. The updater would then ship the built bundle.
+2. **SQLite** (better-sqlite3) instead of one JSON file, for years of history, fast queries and safe concurrent writes.
+3. **electron-builder installers with code signing and electron-updater** for Windows, macOS and Linux, so there are no SmartScreen warnings.
+4. **Widget registry in the plan** (`ui.widgets`): timers/Pomodoro, notes, charts, reading lists, calendar sync. The plan's `schemaVersion` gates new features.
+5. **Sync and accountability partners** (optional and opt-in): share streaks with a friend, a weekly email recap.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `app/` | The Electron app files (copied into `resources/app` on install) |
-| `app/data.js`, `app/daily.js` | Roadmap weeks and the day-by-day subtasks |
-| `app/SKILL.md` | Claude Code skill for talking to the app's local API |
-| `installer/` | Install / update / uninstall scripts for Windows |
+| `app/main.js` | Main process: plan engine, storage, tray, overlays, local API, auto-updater |
+| `app/plan.js` | Plan parsing (JSON/YAML), validation and defaults |
+| `app/renderer.js`, `index.html`, `app.css` | The UI |
+| `app/overlay.html` | Full-screen celebrations (fireworks, confetti, boost, scold) |
+| `app/SKILL.md` | Claude Code skill, synced to `~/.claude/skills/daily-coach/` on launch |
+| `installer/` | Windows install / update / uninstall scripts |
 | `tools/release.mjs` | Builds a release manifest |

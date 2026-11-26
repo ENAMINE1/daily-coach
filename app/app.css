@@ -154,3 +154,8 @@ code{background:var(--panel2);padding:2px 6px;border-radius:6px;font-size:13px}
 @media(prefers-reduced-motion:reduce){.page{animation:none!important}}
 .inline-heat{margin-bottom:4px}
 .inline-heat .gcard{padding:16px 18px}
+.errs{background:var(--mag2);border:1px solid var(--mag);border-radius:10px;padding:10px 14px;margin:10px 0;color:#ffd6e4;font-size:14px}
+.errs ul{margin:6px 0 0;padding-left:18px}.okmsg{background:#0d2e25;border:1px solid #1f6b50;border-radius:10px;padding:10px 14px;margin:10px 0;color:#c9f5df}
+.filebtn{position:relative;overflow:hidden;display:inline-flex;align-items:center}.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.book.single{grid-template-columns:minmax(0,1fr)}
+.card h2 .pill{vertical-align:middle;margin-left:6px}
