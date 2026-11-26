@@ -75,15 +75,46 @@ function graph(cat) {
     <div class="gdays"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span></div>
     <div class="ggrid">${cells.join('')}</div></div></div></section>`;
 }
+const ANIMS = [['page', 'Page turn'], ['slide', 'Slide'], ['flip', 'Calendar flip']];
+let anim = 'page';
+try { anim = localStorage.getItem('heatAnim') || 'page'; } catch {}
+let heatLock = false, wheelAcc = 0;
 function streaks() {
-  return `<div class="glegend" style="justify-content:flex-start;margin:0 0 12px">Less <i class="g0"></i><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i> More · DSA: 1 problem = a solid green, 3+ = the darkest</div>
-  <div class="gstack">${CATS.map(graph).join('')}</div>`;
+  const i = view.heat || 0;
+  return `<div class="hbar">
+    <div class="hpills" role="tablist">${CATS.map((c, j) => `<button role="tab" aria-selected="${j === i}" class="hpill ${j === i ? 'on' : ''}" data-heat="${j}">${c.name}<b>${st.streaks[c.id]}</b></button>`).join('')}</div>
+    <div class="hanim"><span class="k" style="margin:0">Animation</span>${ANIMS.map(([k, n]) => `<button class="btn small ${anim === k ? 'sel' : ''}" data-anim="${k}">${n}</button>`).join('')}</div>
+  </div>
+  <div class="book">
+    <button class="turn prev" data-turn="-1" aria-label="Previous heatmap">‹</button>
+    <div class="stage" id="stage" data-anim="${anim}" tabindex="0" aria-label="Heatmaps. Scroll or use arrow keys to turn pages">${CATS.map((c, j) => `<div class="page ${j === i ? 'on' : ''}" data-p="${j}">${graph(c)}</div>`).join('')}</div>
+    <button class="turn next" data-turn="1" aria-label="Next heatmap">›</button>
+  </div>
+  <div class="hfoot"><div class="dots">${CATS.map((c, j) => `<button class="dot ${j === i ? 'on' : ''}" data-heat="${j}" aria-label="${c.name}"></button>`).join('')}</div>
+  <div class="glegend" style="margin:0">Scroll, swipe or press ← → to turn pages · Less <i class="g0"></i><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i> More</div></div>`;
 }
+function turnTo(n) {
+  const cur = view.heat || 0, len = CATS.length;
+  n = ((n % len) + len) % len;
+  if (n === cur || heatLock) return;
+  const fwd = (n > cur && !(cur === 0 && n === len - 1)) || (cur === len - 1 && n === 0);
+  const stage = document.getElementById('stage');
+  view.heat = n;
+  document.querySelectorAll('.hpill,.dot').forEach(b => { const on = +b.dataset.heat === n; b.classList.toggle('on', on); if (b.classList.contains('hpill')) b.setAttribute('aria-selected', on); });
+  if (!stage) return;
+  const out = stage.querySelector(`.page[data-p="${cur}"]`), inn = stage.querySelector(`.page[data-p="${n}"]`);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { out.className = 'page'; inn.className = 'page on'; return; }
+  heatLock = true;
+  const dir = fwd ? 'next' : 'prev';
+  out.className = `page out-${dir}`; inn.className = `page on in-${dir}`;
+  setTimeout(() => { out.className = 'page'; inn.className = 'page on'; heatLock = false; }, 720);
+}
+
 function mini() {
   return `<div class="minis">${CATS.map(c => {
     const strip = []; for (let i = 13; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const n = catCount(st.days[dkey(d)], c.id); strip.push(`<i class="g${c.lv(n)}"></i>`); }
     const n = catCount(st.days[st.today], c.id);
-    return `<button class="mini" data-tab="streaks"><span class="mn">${c.name}</span><b>${st.streaks[c.id]}<small> day streak</small></b><span class="ms">${strip.join('')}</span><span class="mt">${n} ${c.unit}${n === 1 ? '' : 's'} today</span></button>`;
+    return `<button class="mini" data-tab="streaks" data-jumpheat="${CATS.indexOf(c)}"><span class="mn">${c.name}</span><b>${st.streaks[c.id]}<small> day streak</small></b><span class="ms">${strip.join('')}</span><span class="mt">${n} ${c.unit}${n === 1 ? '' : 's'} today</span></button>`;
   }).join('')}</div>`;
 }
 function dsaCard() {
@@ -102,7 +133,7 @@ function today() {
   const sn = st.todayTasks.reduce((a, t) => a + t.subs.filter(x => (e.subs || {})[x.id]).length, 0), stot = st.todayTasks.reduce((a, t) => a + t.subs.length, 0);
   const mins = st.todayTasks.reduce((a, t) => a + t.min, 0);
   const B = st.backend[st.bw - 1];
-  return `${mini()}<div class="tgrid">
+  return `<section class="inline-heat">${streaks()}</section><div class="tgrid">
   <section class="card"><h2>Today · ${fmt(st.today)}</h2>
     <div class="k">${n} of ${tot} tasks · ${sn} of ${stot} subtasks · ${mins} minutes planned</div><div class="bar"><i style="width:${stot ? sn / stot * 100 : 0}%"></i></div>
     ${st.todayTasks.map(t => subTask(st.today, t, e)).join('')}
@@ -196,7 +227,6 @@ function render() {
   if (view.tab === 'today') v.innerHTML = today();
   else if (view.tab === 'week') v.innerHTML = `<div class="grid">${weekCard('b')}${weekCard('a')}</div>`;
   else if (view.tab === 'journey') v.innerHTML = journey();
-  else if (view.tab === 'streaks') v.innerHTML = streaks();
   else v.innerHTML = history();
   modal();
 }
@@ -208,11 +238,24 @@ document.addEventListener('change', async e => {
   else if (t.classList.contains('wi')) { st = await coach.weekItem(t.dataset.key, t.dataset.item, t.checked); render(); }
   else if (t.classList.contains('ci')) { ci.done[t.dataset.id] = t.checked; t.closest('.task').classList.toggle('done', t.checked); }
 });
-document.addEventListener('keydown', e => { if (e.target.id === 'dsaName' && e.key === 'Enter') $('#dsaAdd').click(); });
+document.addEventListener('wheel', e => {
+  const sg = e.target.closest && e.target.closest('.stage'); if (!sg) return;
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  if (sg.querySelector('.gscroll') && Math.abs(e.deltaX) > Math.abs(e.deltaY) && e.target.closest('.gscroll') && e.target.closest('.gscroll').scrollWidth > e.target.closest('.gscroll').clientWidth) return;
+  const vert = Math.abs(e.deltaY) >= Math.abs(e.deltaX), h = view.heat || 0;
+  if (vert && ((d > 0 && h === CATS.length - 1) || (d < 0 && h === 0)) && !heatLock) { wheelAcc = 0; return; }
+  e.preventDefault(); if (heatLock) { wheelAcc = 0; return; }
+  wheelAcc += d; if (Math.abs(wheelAcc) > 60) { turnTo((view.heat || 0) + (wheelAcc > 0 ? 1 : -1)); wheelAcc = 0; }
+}, { passive: false });
+let touchX = null;
+document.addEventListener('touchstart', e => { if (e.target.closest('.stage')) touchX = e.touches[0].clientX; }, { passive: true });
+document.addEventListener('touchend', e => { if (touchX === null) return; const dx = e.changedTouches[0].clientX - touchX; touchX = null; if (Math.abs(dx) > 50) turnTo((view.heat || 0) + (dx < 0 ? 1 : -1)); });
+document.addEventListener('keydown', e => {
+  if (view.tab === 'today' && !e.target.closest('input,textarea') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); turnTo((view.heat || 0) + (e.key === 'ArrowRight' ? 1 : -1)); return; } if (e.target.id === 'dsaName' && e.key === 'Enter') $('#dsaAdd').click(); });
 document.addEventListener('input', e => { if (e.target.id === 'ciNote') ci.note = e.target.value; if (e.target.id === 'ciDsa') ci.dsa = e.target.value; });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.tab) { view.tab = b.dataset.tab; render(); }
+  if (b.dataset.tab) { if (b.dataset.jumpheat !== undefined) view.heat = +b.dataset.jumpheat; view.tab = b.dataset.tab; render(); }
   else if (b.dataset.wnav) { const p = b.dataset.wnav, list = p === 'b' ? st.backend : st.ae; view[p] = Math.max(1, Math.min(list.length, (view[p] || (p === 'b' ? st.bw : st.aw)) + +b.dataset.d)); render(); }
   else if (b.dataset.jump) { view[b.dataset.jump] = +b.dataset.n; view.tab = 'week'; render(); }
   else if (b.dataset.all) { st = await coach.weekItem(b.dataset.all, '__all', b.dataset.v === '1'); render(); }
@@ -221,6 +264,9 @@ document.addEventListener('click', async e => {
   else if (b.id === 'ciGo') { if (st.needsCheckin) { const r = await coach.checkin({}); st = r.state; } ci.open = false; render(); }
   else if (b.dataset.dsa) { st = await coach.dsa(st.today, { add: +b.dataset.dsa }); render(); }
   else if (b.id === 'dsaAdd') { const v = $('#dsaName').value.trim(); if (v) { st = await coach.dsa(st.today, { problem: v }); render(); } }
+  else if (b.dataset.heat !== undefined) { turnTo(+b.dataset.heat); }
+  else if (b.dataset.turn) { turnTo((view.heat || 0) + +b.dataset.turn); }
+  else if (b.dataset.anim) { anim = b.dataset.anim; try { localStorage.setItem('heatAnim', anim); } catch {} const sg = document.getElementById('stage'); if (sg) sg.dataset.anim = anim; document.querySelectorAll('[data-anim].btn').forEach(x => x.classList.toggle('sel', x.dataset.anim === anim)); turnTo((view.heat || 0) + 1); }
   else if (b.id === 'updCheck') { b.disabled = true; b.textContent = 'Checking...'; await coach.checkUpdate(); refresh(); }
   else if (b.id === 'updGo') { coach.applyUpdate(); }
   else if (b.id === 'sSave') { st = await coach.settings({ name: $('#sName').value, startDate: $('#sStart').value, autoStart: $('#sAuto').checked }); render(); }

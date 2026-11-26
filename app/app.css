@@ -103,3 +103,54 @@ code{background:var(--panel2);padding:2px 6px;border-radius:6px;font-size:13px}
 .dlist{margin:10px 0 0;padding-left:20px;color:var(--mute);font-size:14px}
 .gstack{display:grid;gap:16px}.gcard .ghead h2{font-size:18px}.gs{color:var(--gold)}
 @media(max-width:900px){.minis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---- heatmap book ---- */
+.hbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.hpills{display:flex;gap:6px;flex-wrap:wrap}
+.hpill{background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:8px 14px;color:var(--mute);font-weight:600;display:flex;gap:8px;align-items:center;transition:background .25s,color .25s,border-color .25s}
+.hpill b{background:var(--line);color:var(--ink);border-radius:99px;padding:0 8px;font-size:13px}
+.hpill.on{background:var(--mag2);border-color:var(--mag);color:#fff}.hpill.on b{background:var(--mag)}
+.hanim{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn.sel{border-color:var(--sky);background:#16306a}
+.book{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:10px;align-items:center}
+.turn{height:88px;border-radius:12px;background:var(--panel);border:1px solid var(--line);font-size:28px;color:var(--mute)}
+.turn:hover{color:#fff;border-color:var(--sky)}
+.stage{display:grid;perspective:1800px;outline:none;border-radius:16px}
+.stage:focus-visible{box-shadow:0 0 0 2px var(--sky)}
+.page{grid-area:1/1;visibility:hidden;backface-visibility:hidden;will-change:transform,opacity}
+.page.on,.page.out-next,.page.out-prev{visibility:visible}
+.page .gcard{box-shadow:0 18px 40px rgba(0,0,0,.35)}
+.hfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding:0 54px}
+.dots{display:flex;gap:8px}
+.dot{width:10px;height:10px;border-radius:99px;border:0;background:var(--line);padding:0;transition:width .3s,background .3s}
+.dot.on{width:28px;background:var(--mag)}
+/* Page turn: the old page swings away on its left edge like a book page */
+.stage[data-anim=page] .out-next{transform-origin:left center;animation:pgOutNext .7s cubic-bezier(.45,.05,.3,1) forwards;z-index:2}
+.stage[data-anim=page] .in-next{animation:pgInNext .7s cubic-bezier(.3,.7,.3,1) forwards;z-index:1}
+.stage[data-anim=page] .in-prev{transform-origin:left center;animation:pgInPrev .7s cubic-bezier(.3,.7,.3,1) forwards;z-index:2}
+.stage[data-anim=page] .out-prev{animation:pgOutPrev .7s ease forwards;z-index:1}
+@keyframes pgOutNext{0%{transform:rotateY(0);filter:brightness(1)}60%{filter:brightness(.6)}100%{transform:rotateY(-110deg);opacity:0;filter:brightness(.4)}}
+@keyframes pgInNext{0%{transform:translateZ(-160px) scale(.94);opacity:.2}100%{transform:none;opacity:1}}
+@keyframes pgInPrev{0%{transform:rotateY(-110deg);opacity:0;filter:brightness(.4)}100%{transform:rotateY(0);opacity:1;filter:brightness(1)}}
+@keyframes pgOutPrev{to{transform:translateZ(-160px) scale(.94);opacity:0}}
+/* Slide: pages glide sideways with a slight parallax */
+.stage[data-anim=slide]{overflow:hidden}
+.stage[data-anim=slide] .out-next{animation:slOut .6s cubic-bezier(.65,0,.35,1) forwards}
+.stage[data-anim=slide] .in-next{animation:slIn .6s cubic-bezier(.65,0,.35,1) forwards}
+.stage[data-anim=slide] .out-prev{animation:slOut .6s cubic-bezier(.65,0,.35,1) reverse forwards;animation-name:slOutR}
+.stage[data-anim=slide] .in-prev{animation:slInR .6s cubic-bezier(.65,0,.35,1) forwards}
+@keyframes slOut{to{transform:translateX(-60%) scale(.92);opacity:0}}
+@keyframes slIn{from{transform:translateX(100%)}to{transform:none}}
+@keyframes slOutR{from{transform:none;opacity:1}to{transform:translateX(60%) scale(.92);opacity:0}}
+@keyframes slInR{from{transform:translateX(-100%)}to{transform:none}}
+/* Calendar flip: the page flips over its top edge */
+.stage[data-anim=flip] .out-next{transform-origin:center top;animation:flOut .7s cubic-bezier(.5,0,.5,1) forwards;z-index:2}
+.stage[data-anim=flip] .in-next{animation:flIn .7s ease-out forwards;z-index:1}
+.stage[data-anim=flip] .in-prev{transform-origin:center top;animation:flOut .7s cubic-bezier(.5,0,.5,1) reverse forwards;z-index:2}
+.stage[data-anim=flip] .out-prev{animation:flIn .7s ease-in reverse forwards;z-index:1}
+@keyframes flOut{0%{transform:rotateX(0);opacity:1}100%{transform:rotateX(105deg);opacity:0}}
+@keyframes flIn{0%{transform:translateY(24px) scale(.96);opacity:.3}100%{transform:none;opacity:1}}
+@media(max-width:700px){.book{grid-template-columns:minmax(0,1fr)}.turn{display:none}.hfoot{padding:0}}
+@media(prefers-reduced-motion:reduce){.page{animation:none!important}}
+.inline-heat{margin-bottom:4px}
+.inline-heat .gcard{padding:16px 18px}

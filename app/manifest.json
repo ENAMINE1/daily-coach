@@ -1,18 +1,18 @@
 {
-  "version": "1.3.0",
-  "notes": "Four streak heatmaps (Java, system design, After Effects, DSA) and DSA tracking.",
-  "released": "2026-11-26T17:57:59.632Z",
+  "version": "1.3.1",
+  "notes": "Heatmaps now flip inline on the Today screen: scroll, swipe or use the arrows. Try the 3 animations.",
+  "released": "2026-11-26T18:01:36.350Z",
   "files": {
     "SKILL.md": "c72848720d332631a81a746f5d13c338702cdd7122a9a68919f05d4e6043d1db",
-    "app.css": "60f3c5618df2f0e1df1d95ccf930d698ff67bc8b3da6c4c8534115c26301840e",
+    "app.css": "bebde38f590c2312acaec0df42a589d6dc4f964a23851a18be5132e17eaef557",
     "daily.js": "4eae67cd7baa50b30426b4df54582769d3bc6474e459f3ff56cee65da777365a",
     "data.js": "cba31cdba0955fd6a807d6115bbeea0559929594decfa6114b6e910ddd678681",
     "icon.png": "56693e30898ddc7ed4762278ee3f523ed16e88b508988bbb545efe6cbf5b8a25",
-    "index.html": "0e3bb1f0599e9bf5cbf0773a0839ec5e477cf8a00adedd3c1ea080ae49a1f06c",
+    "index.html": "8c19505c17f5e94a642269d34d4239710adadc224a6bec605407c5365490bc42",
     "main.js": "f42e6aa5371c3dc70027ff75be324e3d745547a8f8ca32cbcc319cf199bfbfed",
     "overlay.html": "92c459a9e9636d046ba692836ef04407003dd76c6d60d0e3531cd39c91e88a51",
-    "package.json": "439d4b152fc127459b15f769dfe17ca5f7e79bb268782b2464e63f2941bfa823",
+    "package.json": "a958b35c5e779a82479d1aed91995f9175d466df9dc304c72f8db269e29a9574",
     "preload.js": "11a1ef6add5a429e3137934019825629f7511c812b1ba30784a1ad136e73788b",
-    "renderer.js": "8c1a8e291d441c2622ccaed9b2482e54e49caae7554c6b7568d2a3ecd32a4219"
+    "renderer.js": "abbbd22ea3b7bafa1abc1dce4d03d3942ecedcc324862fd546e2f686a8395595"
   }
 }

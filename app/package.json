@@ -1,7 +1,7 @@
 {
   "name": "daily-coach",
   "productName": "Daily Coach",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Rahul's daily accountability coach for the six-month roadmap",
   "main": "main.js",
   "author": "Rahul"
