@@ -49,10 +49,10 @@ function subTask(date, t, e) {
 
 const CAT = { java: ['core', 'note', 'payflow', 'review', 'shorts'], sd: ['sd', 'mock'], ae: ['ae'] };
 const CATS = [
-  { id: 'java', name: 'Java & backend', unit: 'subtask', lv: c => c === 0 ? 0 : c <= 2 ? 1 : c <= 5 ? 2 : c <= 8 ? 3 : 4 },
-  { id: 'sd', name: 'System design', unit: 'subtask', lv: c => Math.min(4, c === 0 ? 0 : c + 1) },
-  { id: 'ae', name: 'After Effects', unit: 'subtask', lv: c => Math.min(4, c === 0 ? 0 : c + 1) },
-  { id: 'dsa', name: 'DSA', unit: 'problem', lv: c => Math.min(4, c === 0 ? 0 : c + 1) }];
+  { id: 'java', name: 'Java & backend', unit: 'subtask', hue: 217, lv: c => c === 0 ? 0 : c <= 2 ? 1 : c <= 5 ? 2 : c <= 8 ? 3 : 4 },
+  { id: 'sd', name: 'System design', unit: 'subtask', hue: 268, lv: c => Math.min(4, c === 0 ? 0 : c + 1) },
+  { id: 'ae', name: 'After Effects', unit: 'subtask', hue: 330, lv: c => Math.min(4, c === 0 ? 0 : c + 1) },
+  { id: 'dsa', name: 'DSA', unit: 'problem', hue: 137, lv: c => Math.min(4, c === 0 ? 0 : c + 1) }];
 const catCount = (e, c) => {
   if (!e) return 0;
   if (c === 'dsa') return e.dsa || 0;
@@ -61,6 +61,28 @@ const catCount = (e, c) => {
   return Object.keys(e.done || {}).filter(k => e.done[k] && CAT[c].includes(k)).length * 2;
 };
 const FULL = { java: 9, sd: 2, ae: 2 };
+// 4 colour stops per heatmap, low -> high, for each theme
+const PALETTES = {
+  java: { dark: ['#0b2a5c', '#1f5fbf', '#4f9dff', '#b8dcff'], light: ['#cfe3ff', '#7fb2ff', '#2f6fe0', '#0b2f80'] },
+  sd:   { dark: ['#2a1352', '#5b2bb3', '#9a6bff', '#e2d2ff'], light: ['#e9e0ff', '#b79bff', '#7a45e6', '#2e0f6e'] },
+  ae:   { dark: ['#4a2600', '#c26a00', '#ffa31a', '#fff176'], light: ['#fff3a3', '#ffd23f', '#fb8c00', '#1a1a1a'] },
+  dsa:  { dark: ['#0e4429', '#006d32', '#26a641', '#39d353'], light: ['#9be9a8', '#40c463', '#30a14e', '#216e39'] }
+};
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+function heatColor(id, r) { // r in 0..1 slides smoothly across the 4 stops
+  const P = PALETTES[id][theme === 'light' ? 'light' : 'dark'], x = Math.max(0, Math.min(1, r)) * 3, i = Math.min(2, Math.floor(x)), t = x - i;
+  const a = hex(P[i]), b = hex(P[i + 1]);
+  return '#' + a.map((v, k) => Math.round(v + (b[k] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+function streakStats(id) {
+  const end = new Date(); end.setHours(0, 0, 0, 0);
+  let best = 0, run = 0, bestEnd = null, runStart = null, bestStart = null;
+  for (let i = 364; i >= 0; i--) {
+    const d = new Date(end); d.setDate(d.getDate() - i); const k = dkey(d);
+    if (catCount(st.days[k], id) > 0) { if (!run) runStart = k; run++; if (run > best) { best = run; bestStart = runStart; bestEnd = k; } } else run = 0;
+  }
+  return { best, bestStart, bestEnd };
+}
 const prevToday = {};
 // share of the day's possible subtasks done (habits: share of a "great day"), 0..1
 function heatRatio(k, cat, c) {
@@ -85,14 +107,19 @@ function graph(cat) {
     const bump = isToday && prevToday[cat.id] !== undefined && c > prevToday[cat.id];
     if (isToday) prevToday[cat.id] = c;
     const tip = c ? (cat.id === 'dsa' ? `${c} problem${c === 1 ? '' : 's'}` : `${c} of ${tot} subtasks (${Math.round(r * 100)}%)`) : `nothing`;
-    cells.push(c ? `<i class="gc${r >= 1 ? ' gfull' : ''}${isToday ? ' g-today' : ''}${bump ? ' bump' : ''}" style="--r:${(0.15 + 0.85 * r).toFixed(3)}" title="${tip} on ${fmt(k)}"></i>`
+    cells.push(c ? `<i class="gc${r >= 1 ? ' gfull' : ''}${isToday ? ' g-today' : ''}${bump ? ' bump' : ''}" style="background:${heatColor(cat.id, r)};color:${heatColor(cat.id, r)}" title="${tip} on ${fmt(k)}"></i>`
                  : `<i class="g0${isToday ? ' g-today' : ''}" title="${tip} on ${fmt(k)}"></i>`);
   }
-  return `<section class="card wide gcard"><div class="ghead"><h2>${cat.name}</h2><span class="k" style="margin:0">${total} ${cat.unit}${total === 1 ? '' : 's'} in the last year · ${active} active days · <b class="gs">${st.streaks[cat.id]}-day streak</b></span></div>
+  return `<section class="card wide gcard" style="--h:${cat.hue}"><div class="ghead"><h2>${cat.name}</h2><span class="gdot" style="background:${PALETTES[cat.id][theme === 'light' ? 'light' : 'dark'][2]}"></span></div>
   <div class="gscroll"><div class="gwrap" style="--cols:${col}">
     <div class="gmonths">${months.map(([c, m]) => `<span style="grid-column:${c}">${m}</span>`).join('')}</div>
     <div class="gdays"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span></div>
-    <div class="ggrid">${cells.join('')}</div></div></div></section>`;
+    <div class="ggrid">${cells.join('')}</div></div></div>
+  <div class="glegend">Less <i class="g0"></i>${PALETTES[cat.id][theme === 'light' ? 'light' : 'dark'].map(c => `<i style="background:${c}"></i>`).join('')} More</div>
+  ${(() => { const ss = streakStats(cat.id), u = cat.unit + 's'; return `<div class="gstats">
+    <div><span>Total in the last year</span><b>${total} ${total === 1 ? cat.unit : u}</b><small>${active} active days</small></div>
+    <div><span>Longest streak</span><b>${ss.best} day${ss.best === 1 ? '' : 's'}</b><small>${ss.best ? `${fmt(ss.bestStart)} – ${fmt(ss.bestEnd)}` : 'not started yet'}</small></div>
+    <div><span>Current streak</span><b>${st.streaks[cat.id]} day${st.streaks[cat.id] === 1 ? '' : 's'}</b><small>${st.streaks[cat.id] ? 'keep it alive today' : 'start one today'}</small></div></div>`; })()}</section>`;
 }
 const ANIMS = [['page', 'Page turn'], ['slide', 'Slide'], ['flip', 'Calendar flip']];
 let anim = 'page';
@@ -101,14 +128,14 @@ let heatLock = false, wheelAcc = 0;
 function streaks() {
   const i = view.heat || 0;
   return `<div class="hbar">
-    <div class="hpills" role="tablist">${CATS.map((c, j) => `<button role="tab" aria-selected="${j === i}" class="hpill ${j === i ? 'on' : ''}" data-heat="${j}">${c.name}<b>${st.streaks[c.id]}</b></button>`).join('')}</div>
+    <div class="hpills" role="tablist">${CATS.map((c, j) => `<button role="tab" aria-selected="${j === i}" class="hpill ${j === i ? 'on' : ''}" style="--h:${c.hue}" data-heat="${j}">${c.name}<b>${st.streaks[c.id]}</b></button>`).join('')}</div>
     <div class="hanim"><span class="k" style="margin:0">Animation</span>${ANIMS.map(([k, n]) => `<button class="btn small ${anim === k ? 'sel' : ''}" data-anim="${k}">${n}</button>`).join('')}</div>
   </div>
   <div class="book">
     <div class="stage" id="stage" data-anim="${anim}" tabindex="0" aria-label="Heatmaps. Scroll or use arrow keys to turn pages">${CATS.map((c, j) => `<div class="page ${j === i ? 'on' : ''}" data-p="${j}">${graph(c)}</div>`).join('')}</div>
   </div>
-  <div class="hfoot"><div class="dots">${CATS.map((c, j) => `<button class="dot ${j === i ? 'on' : ''}" data-heat="${j}" aria-label="${c.name}"></button>`).join('')}</div>
-  <div class="glegend" style="margin:0">Scroll, swipe or press ← → to turn pages · 0% <span class="glgrad"></span> 100% of the day's subtasks</div></div>`;
+  <div class="hfoot"><div class="dots">${CATS.map((c, j) => `<button class="dot ${j === i ? 'on' : ''}" style="--h:${c.hue}" data-heat="${j}" aria-label="${c.name}"></button>`).join('')}</div>
+  <div class="glegend" style="margin:0">Scroll, swipe or press ← → to turn pages · each subtask brightens today's square</div></div>`;
 }
 function turnTo(n) {
   const cur = view.heat || 0, len = CATS.length;
@@ -272,7 +299,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('input', e => { if (e.target.id === 'ciNote') ci.note = e.target.value; if (e.target.id === 'ciDsa') ci.dsa = e.target.value; });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.id === 'themeBtn') { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('theme', theme); } catch {} applyTheme(); return; }
+  if (b.id === 'themeBtn') { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('theme', theme); } catch {} applyTheme(); render(); return; }
   if (b.dataset.tab) { if (b.dataset.jumpheat !== undefined) view.heat = +b.dataset.jumpheat; view.tab = b.dataset.tab; render(); }
   else if (b.dataset.wnav) { const p = b.dataset.wnav, list = p === 'b' ? st.backend : st.ae; view[p] = Math.max(1, Math.min(list.length, (view[p] || (p === 'b' ? st.bw : st.aw)) + +b.dataset.d)); render(); }
   else if (b.dataset.jump) { view[b.dataset.jump] = +b.dataset.n; view.tab = 'week'; render(); }
