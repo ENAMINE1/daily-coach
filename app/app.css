@@ -240,3 +240,4 @@ select{width:100%;background:var(--panel2);border:1px solid var(--line);border-r
 input[type=number]{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:10px 12px;font:inherit;font-size:16px}
 .pbar{--h:217}
 .blcard{max-height:640px;overflow:auto}
+.tadd{padding:0 12px 12px 46px}.tadd input{padding:7px 10px;font-size:14px}

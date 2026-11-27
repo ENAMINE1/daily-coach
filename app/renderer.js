@@ -47,7 +47,8 @@ function subTask(date, t, e) {
   return `<div class="tblock ${done ? 'done' : ''}">
   <label class="task head"><input type="checkbox" class="tt" data-date="${date}" data-id="${esc(t.id)}" ${done ? 'checked' : ''}>
   <div><div class="t">${esc(t.label)} ${t.custom ? `<span class="ctag"><i style="background:${catColor(t.cat)}"></i>${esc(st.categories[t.cat] || '')}</span>` : ''}</div><div class="d">${esc(t.detail)}</div></div><div class="m">${t.subs.length ? `${n}/${t.subs.length} · ` : ''}${t.min ? t.min + ' min' : ''}</div></label>
-  ${t.subs.length ? `<div class="subs">${t.subs.map(x => `<label class="sub ${subs[x.id] ? 'done' : ''}"><input type="checkbox" class="st" data-date="${date}" data-id="${esc(x.id)}" ${subs[x.id] ? 'checked' : ''}><span>${esc(x.label)}${x.added ? ' <em class="added">added</em>' : ''}</span></label>`).join('')}</div>` : ''}</div>`;
+  ${t.subs.length ? `<div class="subs">${t.subs.map(x => `<label class="sub ${subs[x.id] ? 'done' : ''}"><input type="checkbox" class="st" data-date="${date}" data-id="${esc(x.id)}" ${subs[x.id] ? 'checked' : ''}><span>${esc(x.label)}</span></label>`).join('')}</div>` : ''}
+  ${date === st.today ? `<div class="dadd tadd"><input type="text" class="tsub" data-task="${esc(t.id)}" placeholder="Add a subtask" maxlength="160"><button class="btn small" data-taddsub="${esc(t.id)}">Add</button></div>` : ''}</div>`;
 }
 
 const CAT = { java: ['core', 'note', 'payflow', 'review', 'shorts'], sd: ['sd', 'mock'], ae: ['ae'] };
@@ -212,7 +213,7 @@ function planView() {
     ${P.tasks.map(tk => `<div class="ptask">
       <div class="phead"><i style="background:${catColor(tk.cat)}"></i><div><div class="t">${esc(tk.label)}</div><div class="d">${esc(st.categories[tk.cat] || '')}${tk.min ? ` · ${tk.min} min` : ''}</div></div>
         <button class="btn small" data-premove="${esc(tk.id)}">Remove task</button></div>
-      <ul class="psubs">${tk.subs.map(x => `<li><span>${esc(x.label)}${x.added ? ' <em class="added">added</em>' : ''}</span><button class="x" data-premove="${esc(x.id)}" aria-label="Remove subtask" title="Remove">×</button></li>`).join('')}</ul>
+      <ul class="psubs">${tk.subs.map(x => `<li><span>${esc(x.label)}</span><button class="x" data-premove="${esc(x.id)}" aria-label="Remove subtask" title="Remove">×</button></li>`).join('')}</ul>
       <div class="dadd"><input type="text" class="psub" data-task="${esc(tk.id)}" placeholder="Add a subtask" maxlength="160"><button class="btn small" data-paddsub="${esc(tk.id)}">Add</button></div>
     </div>`).join('')}
     ${P.hidden.length ? `<div class="k">Removed for this day</div><div class="phidden">${P.hidden.map(h => `<span>${esc(h.label)} <button class="btn small" data-prestore="${esc(h.id)}">Restore</button></span>`).join('')}</div>` : ''}
@@ -365,7 +366,7 @@ let touchX = null;
 document.addEventListener('touchstart', e => { if (e.target.closest('.stage')) touchX = e.touches[0].clientX; }, { passive: true });
 document.addEventListener('touchend', e => { if (touchX === null) return; const dx = e.changedTouches[0].clientX - touchX; touchX = null; if (Math.abs(dx) > 50) turnTo((view.heat || 0) + (dx < 0 ? 1 : -1)); });
 document.addEventListener('keydown', e => {
-  if (view.tab === 'today' && !e.target.closest('input,textarea') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); turnTo((view.heat || 0) + (e.key === 'ArrowRight' ? 1 : -1)); return; } if (e.target.id === 'dsaName' && e.key === 'Enter') $('#dsaAdd').click(); if (e.target.classList.contains('psub') && e.key === 'Enter') document.querySelector(`[data-paddsub="${e.target.dataset.task}"]`).click(); });
+  if (view.tab === 'today' && !e.target.closest('input,textarea') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); turnTo((view.heat || 0) + (e.key === 'ArrowRight' ? 1 : -1)); return; } if (e.target.id === 'dsaName' && e.key === 'Enter') $('#dsaAdd').click(); if (e.target.classList.contains('tsub') && e.key === 'Enter') document.querySelector(`[data-taddsub="${e.target.dataset.task}"]`).click(); if (e.target.classList.contains('psub') && e.key === 'Enter') document.querySelector(`[data-paddsub="${e.target.dataset.task}"]`).click(); });
 document.addEventListener('change', e => { if (e.target.id === 'pDate' && e.target.value) { view.planDate = e.target.value; render(); } });
 document.addEventListener('input', e => { if (e.target.id === 'ciNote') ci.note = e.target.value; if (e.target.id === 'ciDsa') ci.dsa = e.target.value; });
 document.addEventListener('click', async e => {
@@ -380,6 +381,9 @@ document.addEventListener('click', async e => {
   else if (b.dataset.premove) { planDo({ remove: b.dataset.premove }); }
   else if (b.dataset.prestore) { planDo({ restore: b.dataset.prestore }); }
   else if (b.dataset.paddsub) { const inp = document.querySelector(`.psub[data-task="${b.dataset.paddsub}"]`), v = inp.value.trim(); if (v) planDo({ addSubtask: { task: b.dataset.paddsub, label: v } }); }
+  else if (b.dataset.taddsub) {
+    const inp = document.querySelector(`.tsub[data-task="${b.dataset.taddsub}"]`), v = inp.value.trim();
+    if (v) { const r = await coach.planEdit(st.today, { addSubtask: { task: b.dataset.taddsub, label: v } }); st = await coach.state(); render(); const again = document.querySelector(`.tsub[data-task="${b.dataset.taddsub}"]`); if (again) again.focus(); } }
   else if (b.id === 'pAdd') { planDo({ addTask: { label: $('#pLabel').value, category: $('#pCat').value, minutes: +$('#pMin').value, subtasks: $('#pSubs').value } }); }
   else if (b.id === 'sFresh') {
     if (!view.freshArm) { view.freshArm = true; render(); return; }

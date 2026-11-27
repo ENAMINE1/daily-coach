@@ -1,18 +1,18 @@
 {
-  "version": "1.4.0",
-  "notes": "Backlog for unfinished work, a Plan tab to plan or edit any day, and a fresh start on 30 November.",
-  "released": "2026-11-27T07:55:46.745Z",
+  "version": "1.4.1",
+  "notes": "Tasks now start without subtasks. Add your own right on the Today screen or in the Plan tab.",
+  "released": "2026-11-27T08:13:09.820Z",
   "files": {
     "SKILL.md": "c1e66bf3329f789b22759e894c010a4e18740ffe3cafb31eeec4e2215641c78f",
-    "app.css": "33e0389bc497e7cdf5c84a74af65cbb3ddc6e3ce6852698bfac90b6293f9ad09",
+    "app.css": "624433d89c28bb30a808a35d0a4254ddd29333ea0091c2c52e80b00a35351f9f",
     "daily.js": "4eae67cd7baa50b30426b4df54582769d3bc6474e459f3ff56cee65da777365a",
     "data.js": "cba31cdba0955fd6a807d6115bbeea0559929594decfa6114b6e910ddd678681",
     "icon.png": "56693e30898ddc7ed4762278ee3f523ed16e88b508988bbb545efe6cbf5b8a25",
     "index.html": "42ec383f2b992adc8b85f6023fd8b539d3cc9c041a7b9992269a81f7fbf324fc",
-    "main.js": "df36d8ea34128ebc86347cab8c55f27668fdfb2c1ab8168845146d2dfba2b645",
+    "main.js": "28bceaf129cebdb4f1b43368da4f9257d47f76a9d3360d8bab0e953838a6b9a7",
     "overlay.html": "92c459a9e9636d046ba692836ef04407003dd76c6d60d0e3531cd39c91e88a51",
-    "package.json": "dce3fe2b4c7ed9f3f55ee40812bcd745ec2d742e20f7da157cc37d9e59604149",
+    "package.json": "373972168d9fe865b5c7766d440d6ee7d02e9096499e677d6c1951c0135cadeb",
     "preload.js": "14d201e2e6102cb8e654be3411cde34c1ef10cadccabd19e117749a8957e8c80",
-    "renderer.js": "f08a7f9a6c80e9b9fe261e1b1c17a8e0260ecf44c5048c47a35c5a2105eed2bc"
+    "renderer.js": "1875fe8243d7b0107dd239b2e0ce18bd1235dd8d471172f4cb22b9807ee54f5c"
   }
 }

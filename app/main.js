@@ -101,7 +101,8 @@ function baseTasksFor(date) {
             subs: ['Pick one beat from this week\'s AE work (' + A.t + ')', 'Version 1: change the direction', 'Version 2: change the method (scale, mask, morph)', 'Version 3: change the timing', 'Write one line: which wins and why'] }
         : { id: 'ae', label: 'After Effects', detail: `${A.t}: ${A.make}`, min: 30, subs: DA.d[Math.min(i, 3)] }];
   }
-  return list.map(t => ({ ...t, subs: t.subs.map((label, j) => ({ id: `${t.id}.${j}`, label })) }));
+  // Rahul adds his own subtasks (Plan tab / Today), so roadmap tasks start with none.
+  return list.map(t => ({ ...t, subs: [] }));
 }
 // categories feed the four heatmaps
 const TASKCAT = { core: 'java', note: 'java', payflow: 'java', review: 'java', shorts: 'java', sd: 'sd', mock: 'sd', ae: 'ae' };
