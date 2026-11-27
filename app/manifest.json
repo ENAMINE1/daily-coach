@@ -1,18 +1,18 @@
 {
-  "version": "1.3.3",
-  "notes": "Each heatmap has its own colour palette, plus total, longest streak and current streak under every map.",
-  "released": "2026-11-26T18:29:15.230Z",
+  "version": "1.4.0",
+  "notes": "Backlog for unfinished work, a Plan tab to plan or edit any day, and a fresh start on 30 November.",
+  "released": "2026-11-27T07:55:46.745Z",
   "files": {
-    "SKILL.md": "c72848720d332631a81a746f5d13c338702cdd7122a9a68919f05d4e6043d1db",
-    "app.css": "ea0eacb6ba079de676306d6380f7b8eb702911e2fe1270676286f012c34561e4",
+    "SKILL.md": "c1e66bf3329f789b22759e894c010a4e18740ffe3cafb31eeec4e2215641c78f",
+    "app.css": "33e0389bc497e7cdf5c84a74af65cbb3ddc6e3ce6852698bfac90b6293f9ad09",
     "daily.js": "4eae67cd7baa50b30426b4df54582769d3bc6474e459f3ff56cee65da777365a",
     "data.js": "cba31cdba0955fd6a807d6115bbeea0559929594decfa6114b6e910ddd678681",
     "icon.png": "56693e30898ddc7ed4762278ee3f523ed16e88b508988bbb545efe6cbf5b8a25",
-    "index.html": "fefad29a5384cb5b7e52241f1d4eb7455ab796a2c92c2e0902d2253ae9da0f67",
-    "main.js": "381b13af4d2e0ed2e1b1731c27ba1a4950909dd2de7c0e9255aea54397b35f58",
+    "index.html": "42ec383f2b992adc8b85f6023fd8b539d3cc9c041a7b9992269a81f7fbf324fc",
+    "main.js": "df36d8ea34128ebc86347cab8c55f27668fdfb2c1ab8168845146d2dfba2b645",
     "overlay.html": "92c459a9e9636d046ba692836ef04407003dd76c6d60d0e3531cd39c91e88a51",
-    "package.json": "59c608733bb13f19a3e08e6d2bff6ae3027f2a621af7266cc7bed2d118f5bef8",
-    "preload.js": "11a1ef6add5a429e3137934019825629f7511c812b1ba30784a1ad136e73788b",
-    "renderer.js": "749669fa640f739b1184ec9915407e2cbde6695c14fdd256b5adf7366a657385"
+    "package.json": "dce3fe2b4c7ed9f3f55ee40812bcd745ec2d742e20f7da157cc37d9e59604149",
+    "preload.js": "14d201e2e6102cb8e654be3411cde34c1ef10cadccabd19e117749a8957e8c80",
+    "renderer.js": "f08a7f9a6c80e9b9fe261e1b1c17a8e0260ecf44c5048c47a35c5a2105eed2bc"
   }
 }

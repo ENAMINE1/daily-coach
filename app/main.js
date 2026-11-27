@@ -42,8 +42,18 @@ function load() {
   let old = null;
   try { old = JSON.parse(fs.readFileSync(storePath, 'utf8')); } catch { old = null; }
   // nudgeDate = today on first run, so install day never gets a 9 pm scolding
-  S = Object.assign({ name: 'Rahul', startDate: today(), autoStart: true, days: {}, weeks: {}, lastCheckin: null, promptDate: null, nudgeDate: today(), lastLine: '', events: [] }, old || {});
+  S = Object.assign({ name: 'Rahul', startDate: today(), autoStart: true, days: {}, weeks: {}, plans: {}, lastCheckin: null, promptDate: null, nudgeDate: today(), lastLine: '', events: [] }, old || {});
+  S.plans = S.plans || {};
+  // One-time: Rahul asked for everything to start on Monday 30 Nov 2026. Old progress is archived, not deleted.
+  if (!S.resetNov30 && S.startDate < '2026-11-30') { startFresh('2026-11-30', 'Fresh start: your plan begins on Monday 30 November. Use the days before it to set up.'); S.resetNov30 = true; }
   save();
+}
+function startFresh(date, line) {
+  S.archives = S.archives || [];
+  if (Object.keys(S.days).length || Object.keys(S.weeks).length) S.archives.push({ at: new Date().toISOString(), startDate: S.startDate, days: S.days, weeks: S.weeks, plans: S.plans });
+  S.days = {}; S.weeks = {}; S.plans = {};
+  S.startDate = date; S.lastCheckin = null; S.promptDate = null; S.nudgeDate = today();
+  S.lastLine = line || `Fresh start from ${date}.`;
 }
 function save() {
   const t = storePath + '.tmp';
@@ -60,10 +70,10 @@ function currentWeek(p) {
   for (let i = 1; i <= len; i++) if (!(S.weeks[p + i] && S.weeks[p + i].done)) return i;
   return len;
 }
-const calendarWeek = () => Math.max(1, Math.floor(diffDays(S.startDate, today()) / 7) + 1);
+const calendarWeek = () => (today() < S.startDate ? 1 : Math.floor(diffDays(S.startDate, today()) / 7) + 1);
 const doneCount = p => Object.keys(S.weeks).filter(k => k[0] === p && S.weeks[k].done).length;
 
-function tasksFor(date) {
+function baseTasksFor(date) {
   const wd = parse(date).getDay();
   const bw = currentWeek('b'), aw = currentWeek('a');
   const B = R.backend[bw - 1], A = R.ae[aw - 1], DB = D.backend[bw - 1], DA = D.ae[aw - 1];
@@ -93,7 +103,23 @@ function tasksFor(date) {
   }
   return list.map(t => ({ ...t, subs: t.subs.map((label, j) => ({ id: `${t.id}.${j}`, label })) }));
 }
+// categories feed the four heatmaps
+const TASKCAT = { core: 'java', note: 'java', payflow: 'java', review: 'java', shorts: 'java', sd: 'sd', mock: 'sd', ae: 'ae' };
+const CATS = { java: 'Java & backend', sd: 'System design', ae: 'After Effects', dsa: 'DSA' };
+// A day's plan = the roadmap's tasks for that weekday, minus what was removed for that date,
+// plus subtasks and tasks added for that date (S.plans[date]).
+function tasksFor(date) {
+  const c = S.plans[date] || {}, hidden = c.hidden || {}, extra = c.extra || {};
+  const base = baseTasksFor(date).filter(t => !hidden[t.id]).map(t => ({ ...t, cat: TASKCAT[t.id],
+    subs: [...t.subs.filter(x => !hidden[x.id]), ...(extra[t.id] || []).map(x => ({ id: x.id, label: x.label, added: true }))] }));
+  const added = (c.tasks || []).map(t => ({ id: t.id, label: t.label, detail: t.note || CATS[t.cat], min: t.min || 0, cat: t.cat, custom: true,
+    subs: t.subs.map(x => ({ id: x.id, label: x.label, added: true })) }));
+  return [...base, ...added];
+}
+const planOf = d => S.plans[d] || (S.plans[d] = { hidden: {}, extra: {}, tasks: [], seq: 0 });
 const day = d => S.days[d] || (S.days[d] = { done: {}, note: '', reported: false });
+const slim = tl => tl.map(t => ({ id: t.id, label: t.label, cat: t.cat, subs: t.subs.map(x => ({ id: x.id, label: x.label })) }));
+const catOf = (e, taskId) => TASKCAT[taskId] || ((e && e.cats) || {})[taskId];
 function dayScore(d) {
   const e = S.days[d]; if (!e) return 0;
   const t = e.total || tasksFor(d).length;
@@ -109,6 +135,10 @@ function streak() {
 
 function state() {
   const t = today(), y = addDays(t, -1), bw = currentWeek('b'), aw = currentWeek('a'), cw = calendarWeek();
+  if (t >= S.startDate) { // keep today's plan on record for tomorrow's backlog
+    const snap = slim(tasksFor(t)), e = day(t);
+    if (JSON.stringify(e.snap) !== JSON.stringify(snap)) { e.snap = snap; save(); }
+  }
   return {
     name: S.name, startDate: S.startDate, autoStart: S.autoStart, today: t, yesterday: y,
     needsCheckin: S.lastCheckin !== t,
@@ -116,10 +146,11 @@ function state() {
     daysAway: S.lastCheckin ? diffDays(S.lastCheckin, t) : 0,
     todayTasks: tasksFor(t), yesterdayTasks: tasksFor(y),
     days: S.days, weeks: S.weeks, bw, aw, calendarWeek: cw,
-    behind: Math.max(0, Math.min(cw, R.backend.length) - bw),
+    behind: t < S.startDate ? 0 : Math.max(0, Math.min(cw, R.backend.length) - bw), beforeStart: t < S.startDate,
     streak: streak(), backend: R.backend, ae: R.ae, line: S.lastLine,
     doneB: doneCount('b'), doneA: doneCount('a'), port: PORT,
     streaks: Object.fromEntries(['java', 'sd', 'ae', 'dsa'].map(c => [c, catStreak(e => catCount(e, c) > 0)])),
+    backlog: backlog(), categories: CATS,
     version: VERSION, update: { status: upd.status, latest: upd.latest, notes: upd.notes, error: upd.error, checkedAt: upd.checkedAt }
   };
 }
@@ -127,8 +158,11 @@ function state() {
 function afterChange(d) {
   const e = day(d), tl = tasksFor(d);
   e.total = tl.length;
+  e.subs = e.subs || {};
+  for (const t of tl) if (t.subs.length) e.done[t.id] = t.subs.every(x => e.subs[x.id]); // a task is done when all its subtasks are
+  e.snap = slim(tl); // what was planned that day, for the backlog
   // how many subtasks each heatmap could get that day, so the colour can scale with the share done
-  e.heatTotals = Object.fromEntries(Object.keys(CAT).map(c => [c, tl.filter(t => CAT[c].includes(t.id)).reduce((a, t) => a + t.subs.length, 0)]));
+  e.heatTotals = Object.fromEntries(['java', 'sd', 'ae', 'dsa'].map(c => [c, tl.filter(t => t.cat === c).reduce((a, t) => a + (t.subs.length || 1), 0)]));
   if (d === today() && dayScore(d) >= 1 && !e.fullCelebrated) {
     e.fullCelebrated = true;
     S.lastLine = pick(L.dayDone);
@@ -165,11 +199,89 @@ function setDsa(d, { count, add, problem }) {
 function catStreak(fn) {
   let s = 0, d = today();
   if (!fn(S.days[d])) d = addDays(d, -1);
-  while (fn(S.days[d])) { s++; d = addDays(d, -1); }
+  while (d >= S.startDate && fn(S.days[d])) { s++; d = addDays(d, -1); }
   return s;
 }
 const CAT = { java: ['core', 'note', 'payflow', 'review', 'shorts'], sd: ['sd', 'mock'], ae: ['ae'] };
-const catCount = (e, c) => !e ? 0 : c === 'dsa' ? (e.dsa || 0) : Object.keys(e.subs || {}).filter(k => e.subs[k] && CAT[c].includes(k.split('.')[0])).length;
+function catCount(e, c) {
+  if (!e) return 0;
+  const subs = Object.keys(e.subs || {}).filter(k => e.subs[k] && catOf(e, k.split('.')[0]) === c).length;
+  const loose = Object.keys(e.done || {}).filter(k => e.done[k] && catOf(e, k) === c && !Object.keys(e.subs || {}).some(x => x.startsWith(k + '.'))).length;
+  const credit = (e.blDone || []).filter(b => b.cat === c).length;
+  return subs + loose + credit + (c === 'dsa' ? (e.dsa || 0) : 0);
+}
+
+// ---------- backlog: unfinished subtasks from the last 14 days since the start date ----------
+function backlog() {
+  const t = today(), out = [];
+  for (let i = 14; i >= 1; i--) {
+    const d = addDays(t, -i);
+    if (d < S.startDate) continue;
+    const e = S.days[d] || {}, subs = e.subs || {}, bl = e.bl || {};
+    for (const tk of (e.snap || slim(tasksFor(d)))) {
+      const items = tk.subs.length ? tk.subs : [{ id: tk.id, label: tk.label }];
+      for (const x of items) {
+        const done = tk.subs.length ? subs[x.id] : (e.done || {})[tk.id];
+        if (!done && !bl[x.id]) out.push({ date: d, task: tk.id, taskLabel: tk.label, cat: tk.cat || catOf(e, tk.id) || null, id: x.id, label: x.label });
+      }
+    }
+  }
+  return out;
+}
+function resolveBacklog(date, ids, action) {
+  if (!isDate(date) || date >= today() || !['done', 'skip'].includes(action)) return false;
+  const list = backlog().filter(b => b.date === date && (ids === '__all' || ids.includes(b.id)));
+  if (!list.length) return false;
+  const e = day(date), t = day(today());
+  e.bl = e.bl || {};
+  for (const b of list) {
+    e.bl[b.id] = { [action]: true, on: today() };
+    if (action === 'done') (t.blDone = t.blDone || []).push({ from: date, id: b.id, cat: b.cat });
+  }
+  save();
+  if (action === 'done' && !backlog().length) overlay('boost', 'Backlog cleared. Nothing is hanging over you now.');
+  return true;
+}
+
+// ---------- planning a day in the app ----------
+const planDateOk = d => isDate(d) && d >= today() && diffDays(today(), d) <= 31;
+function dayPlan(d) {
+  const c = S.plans[d] || {}, hidden = Object.keys(c.hidden || {}).filter(k => c.hidden[k]);
+  const base = baseTasksFor(d), names = {};
+  base.forEach(t => { names[t.id] = t.label; t.subs.forEach(x => { names[x.id] = `${t.label}: ${x.label}`; }); });
+  return { date: d, editable: planDateOk(d), tasks: tasksFor(d), hidden: hidden.map(id => ({ id, label: names[id] || id })), categories: CATS };
+}
+function planEdit(d, op) {
+  if (!planDateOk(d) || !op || typeof op !== 'object') return { ok: false, error: 'You can plan today and up to 31 days ahead.' };
+  const c = planOf(d), e = day(d), clean = v => str(v, 160).trim();
+  if (op.addTask) {
+    const a = op.addTask, label = clean(a.label), cat = CATS[a.category] ? a.category : null;
+    if (!label || !cat) return { ok: false, error: 'A task needs a name and a category.' };
+    if (c.tasks.length >= 20) return { ok: false, error: 'At most 20 added tasks a day.' };
+    const id = 'c' + (++c.seq);
+    const subs = (Array.isArray(a.subtasks) ? a.subtasks : String(a.subtasks || '').split('\n')).map(clean).filter(Boolean).slice(0, 20);
+    c.tasks.push({ id, label, cat, min: Math.max(0, Math.min(600, Math.round(+a.minutes || 0))), note: clean(a.note), subs: subs.map((l, j) => ({ id: `${id}.${j}`, label: l })) });
+    e.cats = e.cats || {}; e.cats[id] = cat;
+  } else if (op.addSubtask) {
+    const tid = String(op.addSubtask.task || ''), label = clean(op.addSubtask.label), t = tasksFor(d).find(x => x.id === tid);
+    if (!t || !label) return { ok: false, error: 'Pick a task and type the subtask.' };
+    const custom = c.tasks.find(x => x.id === tid);
+    if (custom) { custom.seq = (custom.seq || custom.subs.length); custom.subs.push({ id: `${tid}.${custom.seq++}`, label }); }
+    else { c.extra[tid] = c.extra[tid] || []; c.extra[tid].push({ id: `${tid}.x${++c.seq}`, label }); }
+  } else if (op.remove) {
+    const id = String(op.remove), tid = id.split('.')[0];
+    const ci = c.tasks.findIndex(x => x.id === tid);
+    if (ci >= 0 && id === tid) c.tasks.splice(ci, 1);
+    else if (ci >= 0) c.tasks[ci].subs = c.tasks[ci].subs.filter(x => x.id !== id);
+    else if (c.extra[tid] && c.extra[tid].some(x => x.id === id)) c.extra[tid] = c.extra[tid].filter(x => x.id !== id);
+    else if (baseTasksFor(d).some(t => t.id === id || t.subs.some(x => x.id === id))) c.hidden[id] = true;
+    else return { ok: false, error: 'Nothing with that id on this day.' };
+  } else if (op.restore) {
+    delete c.hidden[String(op.restore)];
+  } else return { ok: false, error: 'Unknown change.' };
+  afterChange(d);
+  return { ok: true, plan: dayPlan(d) };
+}
 
 function doCheckin(p = {}) {
   const t = today();
@@ -314,6 +426,7 @@ function summary() {
     weeksDone: { backend: s.doneB, ae: s.doneA, backendTotal: R.backend.length, aeTotal: R.ae.length },
     dsa: { today: (S.days[t] && S.days[t].dsa) || 0, problemsToday: (S.days[t] && S.days[t].dsaList) || [], streak: catStreak(e => catCount(e, 'dsa') > 0) },
     categoryStreaks: s.streaks,
+    startDate: S.startDate, backlog: s.backlog,
     last7: logDays(7), lastCoachLine: S.lastLine
   };
 }
@@ -338,7 +451,9 @@ function startServer() {
     if (req.method === 'GET') {
       if (u.pathname === '/status') return send(200, summary());
       if (u.pathname === '/log') return send(200, logDays(+u.searchParams.get('days') || 7));
-      if (u.pathname === '/') return send(200, { app: 'Daily Coach', endpoints: ['GET /status', 'GET /log?days=7', 'POST /celebrate', 'POST /boost', 'POST /scold', 'POST /message', 'POST /complete', 'POST /checkin', 'POST /week-item', 'POST /open', 'POST /update', 'POST /dsa'], version: VERSION });
+      if (u.pathname === '/backlog') return send(200, backlog());
+      if (u.pathname === '/plan-day') { const d = u.searchParams.get('date') || today(); return isDate(d) ? send(200, dayPlan(d)) : send(400, { error: 'date must be YYYY-MM-DD' }); }
+      if (u.pathname === '/') return send(200, { app: 'Daily Coach', endpoints: ['GET /status', 'GET /log?days=7', 'POST /celebrate', 'POST /boost', 'POST /scold', 'POST /message', 'POST /complete', 'POST /checkin', 'POST /week-item', 'POST /open', 'POST /update', 'POST /dsa', 'GET /backlog', 'POST /backlog', 'GET /plan-day?date=', 'POST /plan-day'], version: VERSION });
       return send(404, { error: 'not found' });
     }
     if (req.method !== 'POST') return send(405, { error: 'use GET or POST' });
@@ -366,6 +481,15 @@ function startServer() {
           const v = j.done !== false && j.done !== 'false';
           ids.forEach(i => (i.includes('.') ? setSub(d, i, v) : setTask(d, i, v)));
           break;
+        }
+        case '/backlog': {
+          if (!resolveBacklog(String(j.date || ''), j.ids === '__all' || j.all ? '__all' : [].concat(j.ids || j.id || []).map(String), j.action === 'skip' ? 'skip' : 'done')) return send(400, { error: 'nothing in the backlog matches', backlog: backlog() });
+          break;
+        }
+        case '/plan-day': {
+          const r = planEdit(isDate(j.date) ? j.date : today(), j);
+          if (!r.ok) return send(400, r);
+          refreshWin(); return send(200, r);
         }
         case '/checkin': { const r = doCheckin({ date: j.date, done: j.done, note: j.note }); refreshWin(); return send(200, { ok: true, verdict: r.verdict }); }
         case '/week-item': {
@@ -483,10 +607,14 @@ ipcMain.handle('dsa', (_, d, o) => { if (isDate(d)) setDsa(d, o || {}); return s
 ipcMain.handle('checkUpdate', () => checkForUpdates(true));
 ipcMain.handle('applyUpdate', () => applyUpdate());
 ipcMain.handle('checkin', (_, p) => doCheckin(p || {}));
+ipcMain.handle('backlog', (_, d, ids, action) => { resolveBacklog(d, ids === '__all' ? '__all' : [].concat(ids || []).map(String), action); return state(); });
+ipcMain.handle('dayPlan', (_, d) => (isDate(d) ? dayPlan(d) : null));
+ipcMain.handle('planEdit', (_, d, op) => { const r = planEdit(d, op); refreshWin(); return r; });
+ipcMain.handle('startFresh', (_, d) => { if (isDate(d) && diffDays(today(), d) <= 60 && diffDays(d, today()) <= 365) { startFresh(d); save(); } return state(); });
 ipcMain.handle('weekItem', (_, k, item, v) => { setWeekItem(k, item, v); return state(); });
 ipcMain.handle('settings', (_, s = {}) => {
   if (str(s.name, 40).trim()) S.name = str(s.name, 40).trim();
-  if (isDate(s.startDate) && s.startDate <= today()) S.startDate = s.startDate;
+  if (isDate(s.startDate) && diffDays(today(), s.startDate) <= 60) S.startDate = s.startDate;
   if (typeof s.autoStart === 'boolean') { S.autoStart = s.autoStart; applyLogin(); }
   save();
   return state();

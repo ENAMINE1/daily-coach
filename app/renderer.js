@@ -13,6 +13,7 @@ const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good mor
 
 async function refresh() {
   st = await coach.state();
+  if (view.tab === 'plan' && view.planDate) view.plan = await coach.dayPlan(view.planDate);
   if (st.needsCheckin && !ci.open) {
     ci.open = true; ci.step = st.needsReport ? 0 : 1; ci.verdict = null; ci.note = ''; ci.dsa = undefined;
     const y = st.days[st.yesterday]; ci.done = y ? { ...y.done } : {};
@@ -24,12 +25,14 @@ function header() {
   const pctB = Math.round(st.doneB / st.backend.length * 100);
   $('#top').innerHTML = `
   <div><h1>${greet()}, ${esc(st.name)}</h1>
-  <p>Calendar week ${Math.min(st.calendarWeek, 26)} of 26 · you're on backend week ${st.bw} and AE week ${st.aw} · ${pctB}% of backend done</p></div>
+  <p>${st.beforeStart ? `Starts ${fmt(st.startDate)}` : `Calendar week ${Math.min(st.calendarWeek, 26)} of 26`} · you're on backend week ${st.bw} and AE week ${st.aw} · ${pctB}% of backend done</p></div>
   <div class="stats">
     <div class="stat fire"><b>${st.streak}</b><span>day streak</span></div>
     <div class="stat"><b>${st.doneB}/${st.backend.length}</b><span>backend weeks</span></div>
     <div class="stat"><b>${st.doneA}/${st.ae.length}</b><span>AE weeks</span></div>
+    <div class="stat ${st.backlog.length ? 'warnstat' : ''}"><b>${st.backlog.length}</b><span>in backlog</span></div>
   </div>
+  ${st.beforeStart ? `<div class="startnote">Your plan starts on <b>${fmt(st.startDate)}</b>. Until then it's warm-up: try things out, plan your first days in the Plan tab. Nothing counts yet.</div>` : ''}
   ${st.update && st.update.status === 'ready' ? `<div class="upd"><span><b>Update ${esc(st.update.latest)} is ready.</b> ${esc(st.update.notes)}</span><button class="btn primary small" id="updGo">Restart to update</button></div>` : ''}
   ${st.behind > 0 ? `<div class="warn">You're ${st.behind} week${st.behind > 1 ? 's' : ''} behind the calendar. Finish week ${st.bw} before you start anything new.</div>` : ''}`;
 }
@@ -43,8 +46,8 @@ function subTask(date, t, e) {
   const subs = e.subs || {}, n = t.subs.filter(x => subs[x.id]).length, done = !!e.done[t.id];
   return `<div class="tblock ${done ? 'done' : ''}">
   <label class="task head"><input type="checkbox" class="tt" data-date="${date}" data-id="${esc(t.id)}" ${done ? 'checked' : ''}>
-  <div><div class="t">${esc(t.label)}</div><div class="d">${esc(t.detail)}</div></div><div class="m">${n}/${t.subs.length} · ${t.min} min</div></label>
-  <div class="subs">${t.subs.map(x => `<label class="sub ${subs[x.id] ? 'done' : ''}"><input type="checkbox" class="st" data-date="${date}" data-id="${esc(x.id)}" ${subs[x.id] ? 'checked' : ''}><span>${esc(x.label)}</span></label>`).join('')}</div></div>`;
+  <div><div class="t">${esc(t.label)} ${t.custom ? `<span class="ctag"><i style="background:${catColor(t.cat)}"></i>${esc(st.categories[t.cat] || '')}</span>` : ''}</div><div class="d">${esc(t.detail)}</div></div><div class="m">${t.subs.length ? `${n}/${t.subs.length} · ` : ''}${t.min ? t.min + ' min' : ''}</div></label>
+  ${t.subs.length ? `<div class="subs">${t.subs.map(x => `<label class="sub ${subs[x.id] ? 'done' : ''}"><input type="checkbox" class="st" data-date="${date}" data-id="${esc(x.id)}" ${subs[x.id] ? 'checked' : ''}><span>${esc(x.label)}${x.added ? ' <em class="added">added</em>' : ''}</span></label>`).join('')}</div>` : ''}</div>`;
 }
 
 const CAT = { java: ['core', 'note', 'payflow', 'review', 'shorts'], sd: ['sd', 'mock'], ae: ['ae'] };
@@ -53,13 +56,19 @@ const CATS = [
   { id: 'sd', name: 'System design', unit: 'subtask', hue: 268, lv: c => Math.min(4, c === 0 ? 0 : c + 1) },
   { id: 'ae', name: 'After Effects', unit: 'subtask', hue: 330, lv: c => Math.min(4, c === 0 ? 0 : c + 1) },
   { id: 'dsa', name: 'DSA', unit: 'problem', hue: 137, lv: c => Math.min(4, c === 0 ? 0 : c + 1) }];
+const TASKCAT = { core: 'java', note: 'java', payflow: 'java', review: 'java', shorts: 'java', sd: 'sd', mock: 'sd', ae: 'ae' };
+const catOf = (e, tid) => TASKCAT[tid] || ((e && e.cats) || {})[tid];
+// subtasks done in a category + tasks without subtasks + backlog items finished that day (+ DSA problems)
 const catCount = (e, c) => {
   if (!e) return 0;
-  if (c === 'dsa') return e.dsa || 0;
-  const subs = e.subs || {}, keys = Object.keys(subs);
-  if (keys.length) return keys.filter(k => subs[k] && CAT[c].includes(k.split('.')[0])).length;
-  return Object.keys(e.done || {}).filter(k => e.done[k] && CAT[c].includes(k)).length * 2;
+  const sk = Object.keys(e.subs || {});
+  const subs = sk.filter(k => e.subs[k] && catOf(e, k.split('.')[0]) === c).length;
+  const loose = Object.keys(e.done || {}).filter(k => e.done[k] && catOf(e, k) === c && !sk.some(x => x.startsWith(k + '.'))).length;
+  const credit = (e.blDone || []).filter(b => b.cat === c).length;
+  return subs + loose + credit + (c === 'dsa' ? (e.dsa || 0) : 0);
 };
+const countOn = (k, c) => (k < st.startDate ? 0 : catCount(st.days[k], c)); // nothing before the start date counts
+const catColor = c => (PALETTES[c] || PALETTES.java)[theme === 'light' ? 'light' : 'dark'][2];
 const FULL = { java: 9, sd: 2, ae: 2 };
 // 4 colour stops per heatmap, low -> high, for each theme
 const PALETTES = {
@@ -79,7 +88,7 @@ function streakStats(id) {
   let best = 0, run = 0, bestEnd = null, runStart = null, bestStart = null;
   for (let i = 364; i >= 0; i--) {
     const d = new Date(end); d.setDate(d.getDate() - i); const k = dkey(d);
-    if (catCount(st.days[k], id) > 0) { if (!run) runStart = k; run++; if (run > best) { best = run; bestStart = runStart; bestEnd = k; } } else run = 0;
+    if (countOn(k, id) > 0) { if (!run) runStart = k; run++; if (run > best) { best = run; bestStart = runStart; bestEnd = k; } } else run = 0;
   }
   return { best, bestStart, bestEnd };
 }
@@ -88,7 +97,7 @@ const prevToday = {};
 function heatRatio(k, cat, c) {
   if (!c) return [0, 0];
   if (cat.id === 'dsa') return [Math.min(1, c / 2), 2];
-  let tot = k === st.today ? st.todayTasks.reduce((a, t) => a + (CAT[cat.id].includes(t.id) ? t.subs.length : 0), 0) : ((st.days[k] || {}).heatTotals || {})[cat.id];
+  let tot = k === st.today ? st.todayTasks.reduce((a, t) => a + (t.cat === cat.id ? (t.subs.length || 1) : 0), 0) : ((st.days[k] || {}).heatTotals || {})[cat.id];
   if (!tot) tot = FULL[cat.id];
   return [Math.min(1, c / tot), tot];
 }
@@ -102,7 +111,7 @@ function graph(cat) {
   for (const d = new Date(start); d <= end || d.getDay() !== 0; d.setDate(d.getDate() + 1)) {
     if (d.getDay() === 0) { if (d.getMonth() !== lastM && d.getDate() <= 7) { months.push([col + 1, d.toLocaleDateString(undefined, { month: 'short' })]); lastM = d.getMonth(); } col++; }
     if (d > end) { cells.push('<i class="g-x"></i>'); continue; }
-    const k = dkey(d), c = catCount(st.days[k], cat.id); total += c; if (c) active++;
+    const k = dkey(d), c = countOn(k, cat.id); total += c; if (c) active++;
     const [r, tot] = heatRatio(k, cat, c), isToday = k === st.today;
     const bump = isToday && prevToday[cat.id] !== undefined && c > prevToday[cat.id];
     if (isToday) prevToday[cat.id] = c;
@@ -171,6 +180,58 @@ function dsaCard() {
   </section>`;
 }
 
+function backlogCard() {
+  const B = st.backlog; if (!B.length) return '';
+  const byDate = {};
+  B.forEach(b => { (byDate[b.date] = byDate[b.date] || []).push(b); });
+  return `<section class="card blcard"><h2>Backlog <span class="pill">${B.length}</span></h2>
+    <p class="k" style="margin-top:0">Left over from earlier days. Finishing one counts on today's heatmap.</p>
+    ${Object.keys(byDate).sort().map(d => `<div class="blday"><div class="blhead"><b>${fmt(d)}</b><span>
+      <button class="btn small" data-bl="${d}" data-blid="__all" data-act="done">All done</button>
+      <button class="btn small" data-bl="${d}" data-blid="__all" data-act="skip">Skip all</button></span></div>
+      ${byDate[d].map(b => `<div class="blitem"><i style="background:${catColor(b.cat)}"></i><div><div class="d">${esc(b.taskLabel)}</div><div>${esc(b.label)}</div></div>
+        <span class="blbtns"><button class="btn small primary" data-bl="${d}" data-blid="${esc(b.id)}" data-act="done">Done</button><button class="btn small" data-bl="${d}" data-blid="${esc(b.id)}" data-act="skip" aria-label="Skip">Skip</button></span></div>`).join('')}
+    </div>`).join('')}</section>`;
+}
+
+// ---------- Plan tab ----------
+async function loadPlan() { view.plan = await coach.dayPlan(view.planDate); render(); }
+function planView() {
+  const P = view.plan, t = st.today, tm = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return dkey(d); })();
+  const max = (() => { const d = new Date(); d.setDate(d.getDate() + 31); return dkey(d); })();
+  const cats = Object.entries(st.categories);
+  return `<div class="pbar">
+    <button class="hpill ${P.date === t ? 'on' : ''}" data-pdate="${t}">Today</button>
+    <button class="hpill ${P.date === tm ? 'on' : ''}" data-pdate="${tm}">Tomorrow</button>
+    <label class="pdate"><span class="k" style="margin:0">Another day</span><input type="date" id="pDate" min="${t}" max="${max}" value="${P.date}"></label>
+  </div>
+  <div class="tgrid">
+  <section class="card"><h2>Plan for ${fmt(P.date)}</h2>
+    <p class="k" style="margin-top:0">Changes apply to this day only. The roadmap's other days stay as they are.</p>
+    ${P.tasks.length ? '' : '<p class="k">Nothing planned for this day yet. Add a task on the right.</p>'}
+    ${P.tasks.map(tk => `<div class="ptask">
+      <div class="phead"><i style="background:${catColor(tk.cat)}"></i><div><div class="t">${esc(tk.label)}</div><div class="d">${esc(st.categories[tk.cat] || '')}${tk.min ? ` · ${tk.min} min` : ''}</div></div>
+        <button class="btn small" data-premove="${esc(tk.id)}">Remove task</button></div>
+      <ul class="psubs">${tk.subs.map(x => `<li><span>${esc(x.label)}${x.added ? ' <em class="added">added</em>' : ''}</span><button class="x" data-premove="${esc(x.id)}" aria-label="Remove subtask" title="Remove">×</button></li>`).join('')}</ul>
+      <div class="dadd"><input type="text" class="psub" data-task="${esc(tk.id)}" placeholder="Add a subtask" maxlength="160"><button class="btn small" data-paddsub="${esc(tk.id)}">Add</button></div>
+    </div>`).join('')}
+    ${P.hidden.length ? `<div class="k">Removed for this day</div><div class="phidden">${P.hidden.map(h => `<span>${esc(h.label)} <button class="btn small" data-prestore="${esc(h.id)}">Restore</button></span>`).join('')}</div>` : ''}
+    <div id="pMsg"></div>
+  </section>
+  <section class="card"><h2>Add a task</h2>
+    <label class="f"><span>Task</span><input type="text" id="pLabel" maxlength="160" placeholder="e.g. Revise Kafka consumer groups"></label>
+    <label class="f"><span>Category (which heatmap it counts on)</span><select id="pCat">${cats.map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('')}</select></label>
+    <label class="f"><span>Minutes</span><input type="number" id="pMin" min="0" max="600" value="30" style="max-width:120px"></label>
+    <label class="f"><span>Subtasks, one per line</span><textarea id="pSubs" placeholder="Watch the Confluent consumer-groups module\nDraw the rebalancing flow\nWrite 3 interview Q&As"></textarea></label>
+    <div class="actions"><button class="btn primary" id="pAdd">Add to ${fmt(P.date)}</button></div>
+  </section></div>`;
+}
+async function planDo(op) {
+  const r = await coach.planEdit(view.plan.date, op);
+  if (r.ok) { view.plan = r.plan; st = await coach.state(); render(); }
+  else { const m = $('#pMsg'); if (m) m.innerHTML = `<div class="errs">${esc(r.error)}</div>`; }
+}
+
 function today() {
   const e = st.days[st.today] || { done: {}, subs: {} };
   const n = st.todayTasks.filter(t => e.done[t.id]).length, tot = st.todayTasks.length;
@@ -181,8 +242,9 @@ function today() {
   <section class="card"><h2>Today · ${fmt(st.today)}</h2>
     <div class="k">${n} of ${tot} tasks · ${sn} of ${stot} subtasks · ${mins} minutes planned</div><div class="bar"><i style="width:${stot ? sn / stot * 100 : 0}%"></i></div>
     ${st.todayTasks.map(t => subTask(st.today, t, e)).join('')}
+    <div class="actions" style="justify-content:flex-start"><button class="btn small" data-tab="plan" data-plandate="${st.today}">Edit today's plan</button><button class="btn small" data-tab="plan" data-plandate="tomorrow">Plan tomorrow</button></div>
   </section>
-  <div class="col">${dsaCard()}<section class="card"><h2>Coach says</h2>
+  <div class="col">${backlogCard()}${dsaCard()}<section class="card"><h2>Coach says</h2>
     <p class="line">${esc(st.line || 'Show up today. That is the whole trick.')}</p>
     <div class="k">This week's limit question</div><div class="q">${esc(B.q)}</div>
     <div class="k">Answer it out loud before Sunday. If you can't, the week isn't done.</div>
@@ -227,9 +289,12 @@ function history() {
   <section class="card"><h2>Daily reports</h2>${logs}</section>
   <section class="card"><h2>Settings</h2>
     <label class="f"><span>Your name</span><input type="text" id="sName" value="${esc(st.name)}"></label>
-    <label class="f"><span>Plan start date (sets the calendar week)</span><input type="date" id="sStart" value="${st.startDate}"></label>
+    <label class="f"><span>Plan start date (sets the calendar week; can be up to 60 days ahead)</span><input type="date" id="sStart" value="${st.startDate}"></label>
     <label class="task"><input type="checkbox" id="sAuto" ${st.autoStart ? 'checked' : ''}><div><div class="t">Start with Windows</div><div class="d">Opens your morning check-in when you log in</div></div></label>
     <div class="actions"><button class="btn primary" id="sSave">Save settings</button></div>
+    <div class="k">Start fresh</div>
+    <p class="d" style="color:var(--mute);margin:0 0 8px">Archives your progress (nothing is deleted) and restarts the plan from the date above: week 1, empty heatmaps, empty backlog.</p>
+    <button class="btn small ${view.freshArm ? 'primary' : ''}" id="sFresh">${view.freshArm ? `Yes, start fresh from ${fmt($('#sStart') ? $('#sStart').value || st.startDate : st.startDate)}` : 'Start fresh from this date'}</button>
     <div class="k">Preview the overlays</div>
     <div class="actions" style="justify-content:flex-start">${['fireworks', 'confetti', 'boost', 'scold'].map(k => `<button class="btn small" data-test="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
     <div class="k">Version</div>
@@ -271,6 +336,11 @@ function render() {
   if (view.tab === 'today') v.innerHTML = today();
   else if (view.tab === 'week') v.innerHTML = `<div class="grid">${weekCard('b')}${weekCard('a')}</div>`;
   else if (view.tab === 'journey') v.innerHTML = journey();
+  else if (view.tab === 'plan') {
+    if (!view.planDate) view.planDate = st.today;
+    if (!view.plan || view.plan.date !== view.planDate) { v.innerHTML = '<p class="k">Loading…</p>'; loadPlan(); }
+    else v.innerHTML = planView();
+  }
   else v.innerHTML = history();
   modal();
 }
@@ -295,12 +365,25 @@ let touchX = null;
 document.addEventListener('touchstart', e => { if (e.target.closest('.stage')) touchX = e.touches[0].clientX; }, { passive: true });
 document.addEventListener('touchend', e => { if (touchX === null) return; const dx = e.changedTouches[0].clientX - touchX; touchX = null; if (Math.abs(dx) > 50) turnTo((view.heat || 0) + (dx < 0 ? 1 : -1)); });
 document.addEventListener('keydown', e => {
-  if (view.tab === 'today' && !e.target.closest('input,textarea') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); turnTo((view.heat || 0) + (e.key === 'ArrowRight' ? 1 : -1)); return; } if (e.target.id === 'dsaName' && e.key === 'Enter') $('#dsaAdd').click(); });
+  if (view.tab === 'today' && !e.target.closest('input,textarea') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); turnTo((view.heat || 0) + (e.key === 'ArrowRight' ? 1 : -1)); return; } if (e.target.id === 'dsaName' && e.key === 'Enter') $('#dsaAdd').click(); if (e.target.classList.contains('psub') && e.key === 'Enter') document.querySelector(`[data-paddsub="${e.target.dataset.task}"]`).click(); });
+document.addEventListener('change', e => { if (e.target.id === 'pDate' && e.target.value) { view.planDate = e.target.value; render(); } });
 document.addEventListener('input', e => { if (e.target.id === 'ciNote') ci.note = e.target.value; if (e.target.id === 'ciDsa') ci.dsa = e.target.value; });
 document.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.id === 'themeBtn') { theme = theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('theme', theme); } catch {} applyTheme(); render(); return; }
-  if (b.dataset.tab) { if (b.dataset.jumpheat !== undefined) view.heat = +b.dataset.jumpheat; view.tab = b.dataset.tab; render(); }
+  if (b.dataset.tab) {
+    if (b.dataset.jumpheat !== undefined) view.heat = +b.dataset.jumpheat;
+    if (b.dataset.plandate) { const d = new Date(); if (b.dataset.plandate === 'tomorrow') d.setDate(d.getDate() + 1); view.planDate = b.dataset.plandate === 'tomorrow' ? dkey(d) : b.dataset.plandate; }
+    view.tab = b.dataset.tab; render(); }
+  else if (b.dataset.bl) { st = await coach.backlog(b.dataset.bl, b.dataset.blid, b.dataset.act); render(); }
+  else if (b.dataset.pdate) { view.planDate = b.dataset.pdate; render(); }
+  else if (b.dataset.premove) { planDo({ remove: b.dataset.premove }); }
+  else if (b.dataset.prestore) { planDo({ restore: b.dataset.prestore }); }
+  else if (b.dataset.paddsub) { const inp = document.querySelector(`.psub[data-task="${b.dataset.paddsub}"]`), v = inp.value.trim(); if (v) planDo({ addSubtask: { task: b.dataset.paddsub, label: v } }); }
+  else if (b.id === 'pAdd') { planDo({ addTask: { label: $('#pLabel').value, category: $('#pCat').value, minutes: +$('#pMin').value, subtasks: $('#pSubs').value } }); }
+  else if (b.id === 'sFresh') {
+    if (!view.freshArm) { view.freshArm = true; render(); return; }
+    view.freshArm = false; ci.open = false; st = await coach.startFresh($('#sStart').value || st.startDate); render(); }
   else if (b.dataset.wnav) { const p = b.dataset.wnav, list = p === 'b' ? st.backend : st.ae; view[p] = Math.max(1, Math.min(list.length, (view[p] || (p === 'b' ? st.bw : st.aw)) + +b.dataset.d)); render(); }
   else if (b.dataset.jump) { view[b.dataset.jump] = +b.dataset.n; view.tab = 'week'; render(); }
   else if (b.dataset.all) { st = await coach.weekItem(b.dataset.all, '__all', b.dataset.v === '1'); render(); }

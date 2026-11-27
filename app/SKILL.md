@@ -61,6 +61,26 @@ Check for or force an app update (installed copies auto-update from github.com/E
 curl -s -X POST http://127.0.0.1:47820/update
 ```
 
+## Backlog and planning days
+
+Subtasks left unfinished on earlier days (since the start date, last 14 days) sit in a backlog. Finishing one later counts on today's heatmap.
+
+```bash
+curl -s http://127.0.0.1:47820/backlog
+curl -s -X POST http://127.0.0.1:47820/backlog -H "Content-Type: application/json" -d '{"date":"2026-11-30","ids":["core.2"],"action":"done"}'   # or "skip"; "ids":"__all" for the whole day
+```
+
+Plan a day (today up to 31 days ahead). Changes apply to that date only. Categories: java, sd, ae, dsa (they decide which heatmap a task counts on):
+
+```bash
+curl -s "http://127.0.0.1:47820/plan-day?date=2026-12-02"
+curl -s -X POST http://127.0.0.1:47820/plan-day -H "Content-Type: application/json" -d '{"date":"2026-12-02","addTask":{"label":"Revise Kafka consumer groups","category":"sd","minutes":40,"subtasks":["Watch the module","Draw rebalancing","Write 3 Q&As"]}}'
+curl -s -X POST http://127.0.0.1:47820/plan-day -H "Content-Type: application/json" -d '{"date":"2026-12-02","addSubtask":{"task":"core","label":"Read Baeldung on JIT"}}'
+curl -s -X POST http://127.0.0.1:47820/plan-day -H "Content-Type: application/json" -d '{"date":"2026-12-02","remove":"ae.1"}'    # a task id or subtask id; "restore" brings a roadmap item back
+```
+
+When the user asks you to plan tomorrow, read `/status` and `/backlog` first, propose the plan in chat, and only write it after they agree.
+
 Completing a whole week fires fireworks automatically, so don't also call /celebrate for it.
 
 ## How to coach
@@ -68,6 +88,7 @@ Completing a whole week fires fireworks automatically, so don't also call /celeb
 - When he asks "what do I do today?", read `/status` and walk him through today's subtasks in order, adding a tip or a resource for each where it helps.
 - `/log` includes `subtasksDone` per day, the same numbers as the contribution graph in the app.
 - If `dsa.today` is 0 late in the day, nudge him toward one problem. If the DSA streak breaks, say so plainly.
+- Before starting on today's list, mention anything waiting in the backlog. Old unfinished work shouldn't silently disappear.
 - Start from the data: name the specific task or week, not a generic pep talk.
 - All done: celebrate. Half done: acknowledge it, then push on the specific missing task. Nothing done, or behind the calendar: scold, firmly and kindly. Short and direct, never insulting.
 - Ask him to answer this week's limit question in his own words. If he can't, the week isn't done, so don't tick it.
